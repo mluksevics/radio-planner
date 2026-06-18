@@ -1,0 +1,48 @@
+name: Deploy API (Azure Functions)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "api/**"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
+
+permissions:
+  id-token: write # required for OIDC login (keyless)
+  contents: read
+
+env:
+  FUNCTION_APP_NAME: radio-planner-api
+  RESOURCE_GROUP: startref_group
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install production dependencies
+        working-directory: api
+        run: npm ci --omit=dev
+
+      - name: Package function app
+        run: |
+          cd api
+          zip -r ../api.zip . -x "local.settings.json" "*.zip"
+
+      - name: Azure login (OIDC, no secrets)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy zip to Function App
+        run: |
+          az functionapp deployment source config-zip \
+            -g "$RESOURCE_GROUP" -n "$FUNCTION_APP_NAME" --src api.zip
