@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { CourseRow } from "@/lib/types";
 import { buildOverview, OverviewRow } from "@/lib/analysis";
 import { useTableSort } from "@/lib/sorting";
@@ -12,10 +12,29 @@ interface Props {
   controls: string[];
 }
 
+function move<T>(arr: T[], from: number, to: number): T[] {
+  const copy = [...arr];
+  const [item] = copy.splice(from, 1);
+  copy.splice(to, 0, item);
+  return copy;
+}
+
 export default function OverviewTable({ rows, controls }: Props) {
+  // manual column order; reconciled with the current selection each render
+  const [order, setOrder] = useState<string[]>(controls);
+  const [dragCol, setDragCol] = useState<number | null>(null);
+  const [overCol, setOverCol] = useState<number | null>(null);
+
+  const ordered = useMemo(() => {
+    const set = new Set(controls);
+    const kept = order.filter((c) => set.has(c));
+    const added = controls.filter((c) => !kept.includes(c));
+    return [...kept, ...added];
+  }, [order, controls]);
+
   const overview = useMemo(
-    () => buildOverview(rows, controls),
-    [rows, controls],
+    () => buildOverview(rows, ordered),
+    [rows, ordered],
   );
 
   const getValue = useCallback(
@@ -39,6 +58,14 @@ export default function OverviewTable({ rows, controls }: Props) {
     "desc",
   );
 
+  function dropCol(target: number) {
+    if (dragCol !== null && dragCol !== target) {
+      setOrder(move(ordered, dragCol, target));
+    }
+    setDragCol(null);
+    setOverCol(null);
+  }
+
   if (controls.length === 0) {
     return (
       <p className="p-4 text-sm text-gray-500">
@@ -56,25 +83,48 @@ export default function OverviewTable({ rows, controls }: Props) {
             <SortTh label="Class" sortKey="class" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5 text-left" />
             <SortTh label="Course" sortKey="course" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5 text-left" />
             <SortTh label="km" sortKey="length" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5 text-right" />
-            {controls.map((c) => (
-              <SortTh
+            {ordered.map((c, idx) => (
+              <th
                 key={c}
-                label={`${c} radio`}
-                sortKey={`c:${c}`}
-                activeKey={sortKey}
-                dir={sortDir}
-                onToggle={toggle}
                 colSpan={2}
-                color={radioColor(c)}
-                className="border-l border-gray-200 px-2 py-1.5 text-center"
-              />
+                draggable
+                onDragStart={() => setDragCol(idx)}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (overCol !== idx) setOverCol(idx);
+                }}
+                onDrop={() => dropCol(idx)}
+                onDragEnd={() => {
+                  setDragCol(null);
+                  setOverCol(null);
+                }}
+                style={{ color: radioColor(c) }}
+                className={`cursor-move whitespace-nowrap border-l px-2 py-1.5 text-center ${
+                  overCol === idx && dragCol !== null && dragCol !== idx
+                    ? "border-l-2 border-l-blue-500"
+                    : "border-gray-200"
+                } ${dragCol === idx ? "opacity-40" : ""}`}
+                title="Drag to reorder column"
+              >
+                <button
+                  onClick={() => toggle(`c:${c}`)}
+                  className="inline-flex items-center gap-0.5"
+                  title="Click to sort"
+                >
+                  <span className="text-[10px] text-gray-300">⠿</span>
+                  {c} radio
+                  <span className="text-[9px] text-gray-400">
+                    {sortKey === `c:${c}` ? (sortDir === "asc" ? "▲" : "▼") : "↕"}
+                  </span>
+                </button>
+              </th>
             ))}
           </tr>
           <tr className="border-b border-gray-200 text-[10px] text-gray-400">
             <th></th>
             <th></th>
             <th></th>
-            {controls.map((c) => (
+            {ordered.map((c) => (
               <th key={c} colSpan={2} className="border-l border-gray-200 px-2 pb-1">
                 <span className="mr-3">km</span>
                 <span>ratio</span>
@@ -90,7 +140,7 @@ export default function OverviewTable({ rows, controls }: Props) {
               <td className="px-2 py-1 text-right tabular-nums text-gray-500">
                 {r.length}
               </td>
-              {controls.map((c) => {
+              {ordered.map((c) => {
                 const cell = r.cells[c];
                 return (
                   <td
