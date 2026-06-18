@@ -4,7 +4,14 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { AppState, CourseRow, RadioControl } from "@/lib/types";
 import { parseCourses } from "@/lib/parse";
 import { controlUsage, usageRanks } from "@/lib/analysis";
-import { loadLocal, saveLocal, exportJson, importJson } from "@/lib/storage";
+import {
+  loadLocal,
+  saveLocal,
+  exportJson,
+  importJson,
+  buildShareLink,
+  decodeStateFromHash,
+} from "@/lib/storage";
 import { exportXlsx } from "@/lib/excel";
 import Toolbar from "@/components/Toolbar";
 import DataInput from "@/components/DataInput";
@@ -88,17 +95,29 @@ export default function Home() {
   const [showData, setShowData] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(380);
+  const [linkCopied, setLinkCopied] = useState(false);
   const draggingRef = useRef(false);
 
-  // hydrate from localStorage once on mount
+  // hydrate on mount: a shared link (URL hash) wins over locally saved state
   useEffect(() => {
-    const saved = loadLocal();
+    const shared = decodeStateFromHash();
+    const saved = shared ?? loadLocal();
     if (saved) {
       dispatch({ type: "LOAD_STATE", state: saved });
       if (saved.rows.length > 0) setShowData(false);
     }
     setHydrated(true);
   }, []);
+
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(buildShareLink(state));
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 1800);
+    } catch {
+      alert("Could not copy link to clipboard.");
+    }
+  }
 
   // persist after hydration
   useEffect(() => {
@@ -217,6 +236,8 @@ export default function Home() {
             onSaveJson={() => exportJson(state)}
             onLoadJson={handleLoadJson}
             onExportExcel={() => exportXlsx(state)}
+            onCopyLink={handleCopyLink}
+            linkCopied={linkCopied}
             onPrint={() => window.print()}
           />
         </div>

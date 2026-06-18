@@ -8,7 +8,9 @@ interface Props {
   onSaveJson: () => void;
   onLoadJson: (file: File) => void;
   onExportExcel: () => void;
+  onCopyLink: () => void;
   onPrint: () => void;
+  linkCopied: boolean;
 }
 
 export default function Toolbar({
@@ -17,7 +19,9 @@ export default function Toolbar({
   onSaveJson,
   onLoadJson,
   onExportExcel,
+  onCopyLink,
   onPrint,
+  linkCopied,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -33,6 +37,13 @@ export default function Toolbar({
         Heatmap
       </label>
       <span className="mx-1 h-5 w-px bg-gray-300" />
+      <button
+        onClick={onCopyLink}
+        className="rounded border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50"
+        title="Copy a shareable link that encodes this exact version"
+      >
+        {linkCopied ? "Link copied!" : "Copy link"}
+      </button>
       <button
         onClick={onSaveJson}
         className="rounded border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50"

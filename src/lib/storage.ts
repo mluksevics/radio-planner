@@ -1,6 +1,11 @@
+import {
+  compressToEncodedURIComponent,
+  decompressFromEncodedURIComponent,
+} from "lz-string";
 import { AppState, APP_STATE_VERSION, PersistedState } from "./types";
 
 const KEY = "radio-controls-state-v1";
+const HASH_PREFIX = "#s=";
 
 export function loadLocal(): AppState | null {
   if (typeof window === "undefined") return null;
@@ -34,6 +39,30 @@ export function exportJson(state: AppState): void {
 export async function importJson(file: File): Promise<AppState> {
   const text = await file.text();
   return normalize(JSON.parse(text));
+}
+
+/** Build a shareable URL with the full state compressed into the hash fragment. */
+export function buildShareLink(state: AppState): string {
+  const payload: PersistedState = { version: APP_STATE_VERSION, ...state };
+  const encoded = compressToEncodedURIComponent(JSON.stringify(payload));
+  const { origin, pathname } = window.location;
+  return `${origin}${pathname}${HASH_PREFIX}${encoded}`;
+}
+
+/** Decode state from the current URL hash, or null if there is none / it is invalid. */
+export function decodeStateFromHash(): AppState | null {
+  if (typeof window === "undefined") return null;
+  const hash = window.location.hash;
+  if (!hash.startsWith(HASH_PREFIX)) return null;
+  try {
+    const json = decompressFromEncodedURIComponent(
+      hash.slice(HASH_PREFIX.length),
+    );
+    if (!json) return null;
+    return normalize(JSON.parse(json));
+  } catch {
+    return null;
+  }
 }
 
 function normalize(data: Partial<PersistedState>): AppState {
