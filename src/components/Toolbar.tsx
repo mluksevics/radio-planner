@@ -11,6 +11,7 @@ interface Props {
   onCopyLink: () => void;
   onPrint: () => void;
   linkCopied: boolean;
+  linkSaving: boolean;
 }
 
 export default function Toolbar({
@@ -22,6 +23,7 @@ export default function Toolbar({
   onCopyLink,
   onPrint,
   linkCopied,
+  linkSaving,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -39,10 +41,11 @@ export default function Toolbar({
       <span className="mx-1 h-5 w-px bg-gray-300" />
       <button
         onClick={onCopyLink}
-        className="rounded border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50"
-        title="Copy a shareable link that encodes this exact version"
+        disabled={linkSaving}
+        className="rounded border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-60"
+        title="Save this version to the server and copy a shareable /id link"
       >
-        {linkCopied ? "Link copied!" : "Copy link"}
+        {linkSaving ? "Saving…" : linkCopied ? "Link copied!" : "Save & copy link"}
       </button>
       <button
         onClick={onSaveJson}

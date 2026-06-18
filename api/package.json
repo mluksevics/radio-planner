@@ -1,0 +1,14 @@
+{
+  "name": "radio-planner-api",
+  "version": "1.0.0",
+  "description": "Azure Functions API for storing radio-planner state snapshots",
+  "main": "src/functions/*.js",
+  "scripts": {
+    "start": "func start"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.7.0",
+    "@azure/identity": "^4.5.0",
+    "@azure/storage-blob": "^12.26.0"
+  }
+}

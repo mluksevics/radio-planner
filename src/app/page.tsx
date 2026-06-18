@@ -9,8 +9,10 @@ import {
   saveLocal,
   exportJson,
   importJson,
-  buildShareLink,
   decodeStateFromHash,
+  saveStateToServer,
+  loadStateFromServer,
+  currentShareId,
 } from "@/lib/storage";
 import { exportXlsx } from "@/lib/excel";
 import Toolbar from "@/components/Toolbar";
@@ -96,10 +98,27 @@ export default function Home() {
   const [hydrated, setHydrated] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(380);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [linkSaving, setLinkSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const draggingRef = useRef(false);
 
-  // hydrate on mount: a shared link (URL hash) wins over locally saved state
+  // hydrate on mount: /{id} shared link > URL hash > locally saved state
   useEffect(() => {
+    const id = currentShareId();
+    if (id) {
+      loadStateFromServer(id)
+        .then((s) => {
+          if (s) {
+            dispatch({ type: "LOAD_STATE", state: s });
+            if (s.rows.length > 0) setShowData(false);
+          } else {
+            setLoadError("This shared link was not found.");
+          }
+        })
+        .catch(() => setLoadError("Could not load the shared link."))
+        .finally(() => setHydrated(true));
+      return;
+    }
     const shared = decodeStateFromHash();
     const saved = shared ?? loadLocal();
     if (saved) {
@@ -110,12 +129,18 @@ export default function Home() {
   }, []);
 
   async function handleCopyLink() {
+    setLinkSaving(true);
     try {
-      await navigator.clipboard.writeText(buildShareLink(state));
+      const id = await saveStateToServer(state);
+      const link = `${window.location.origin}/${id}`;
+      await navigator.clipboard.writeText(link);
+      window.history.replaceState(null, "", `/${id}`);
       setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 1800);
+      setTimeout(() => setLinkCopied(false), 2200);
     } catch {
-      alert("Could not copy link to clipboard.");
+      alert("Could not save and copy the link. Please try again.");
+    } finally {
+      setLinkSaving(false);
     }
   }
 
@@ -238,10 +263,23 @@ export default function Home() {
             onExportExcel={() => exportXlsx(state)}
             onCopyLink={handleCopyLink}
             linkCopied={linkCopied}
+            linkSaving={linkSaving}
             onPrint={() => window.print()}
           />
         </div>
       </header>
+
+      {loadError && (
+        <div className="flex items-center justify-between rounded border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-800 print:hidden">
+          <span>{loadError}</span>
+          <button
+            onClick={() => setLoadError(null)}
+            className="ml-3 rounded px-2 text-amber-700 hover:bg-amber-100"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1 gap-0 print:block print:min-h-0">
         {/* main export view — always visible */}

@@ -7,6 +7,38 @@ import { AppState, APP_STATE_VERSION, PersistedState } from "./types";
 const KEY = "radio-controls-state-v1";
 const HASH_PREFIX = "#s=";
 
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE ??
+  "https://radio-planner-api.azurewebsites.net";
+
+/** Save an immutable snapshot to the server; returns its id. */
+export async function saveStateToServer(state: AppState): Promise<string> {
+  const payload: PersistedState = { version: APP_STATE_VERSION, ...state };
+  const res = await fetch(`${API_BASE}/api/states`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Save failed (${res.status})`);
+  const { id } = (await res.json()) as { id: string };
+  return id;
+}
+
+/** Load a snapshot by id; null if it does not exist. */
+export async function loadStateFromServer(id: string): Promise<AppState | null> {
+  const res = await fetch(`${API_BASE}/api/states/${encodeURIComponent(id)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Load failed (${res.status})`);
+  return normalize(await res.json());
+}
+
+/** Extract a snapshot id from the current path (e.g. /a1b2c3...), or null. */
+export function currentShareId(): string | null {
+  if (typeof window === "undefined") return null;
+  const seg = window.location.pathname.replace(/^\/+|\/+$/g, "");
+  return /^[A-Za-z0-9-]{8,64}$/.test(seg) ? seg : null;
+}
+
 export function loadLocal(): AppState | null {
   if (typeof window === "undefined") return null;
   try {
