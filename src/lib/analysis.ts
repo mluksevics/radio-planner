@@ -34,6 +34,23 @@ export function usageCountMap(rows: CourseRow[]): Map<string, number> {
   return m;
 }
 
+/**
+ * Dense rank of each control by usage count: the lowest distinct count is rank 1,
+ * the next distinct count rank 2, etc. e.g. counts {27,12,11} -> {27:3, 12:2, 11:1}.
+ * Used for heatmap shading so colors spread by frequency tier, not raw count.
+ */
+export function usageRanks(usage: ControlUsage[]): {
+  rank: Map<string, number>;
+  maxRank: number;
+} {
+  const distinct = [...new Set(usage.map((u) => u.count))].sort((a, b) => a - b);
+  const rankOf = new Map<number, number>();
+  distinct.forEach((count, i) => rankOf.set(count, i + 1));
+  const rank = new Map<string, number>();
+  for (const u of usage) rank.set(u.control, rankOf.get(u.count) ?? 0);
+  return { rank, maxRank: distinct.length };
+}
+
 /** Cumulative distance (km) from start to the first occurrence of `control`, or null if absent. */
 export function cumulativeDistance(row: CourseRow, control: string): number | null {
   let total = 0;

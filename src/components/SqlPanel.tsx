@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { CourseRow, RadioControl } from "@/lib/types";
 import { buildSql } from "@/lib/analysis";
+import { useTableSort } from "@/lib/sorting";
+import SortTh from "./SortTh";
 
 interface Props {
   rows: CourseRow[];
@@ -10,6 +12,21 @@ interface Props {
   eventId: string;
   onUpdate: (control: string, patch: Partial<RadioControl>) => void;
   onSetEventId: (id: string) => void;
+}
+
+function getValue(rc: RadioControl, key: string): number | string {
+  switch (key) {
+    case "control":
+      return Number(rc.control);
+    case "code":
+      return rc.code || rc.control;
+    case "name":
+      return rc.name;
+    case "corder":
+      return rc.corder;
+    default:
+      return "";
+  }
 }
 
 export default function SqlPanel({
@@ -20,21 +37,26 @@ export default function SqlPanel({
   onSetEventId,
 }: Props) {
   const [copied, setCopied] = useState(false);
-  const controls = Object.values(selection).sort((a, b) =>
-    numeric(a.control, b.control),
+  const controls = useMemo(() => Object.values(selection), [selection]);
+
+  const { sorted, sortKey, sortDir, toggle } = useTableSort(
+    controls,
+    getValue,
+    "control",
+    "asc",
   );
 
   const sql = useMemo(
-    () => buildSql(rows, controls, eventId),
-    [rows, controls, eventId],
+    () => buildSql(rows, sorted, eventId),
+    [rows, sorted, eventId],
   );
   const sqlText = sql.map((s) => s.statement).join("\n");
 
-  async function copy() {
+  const copy = useCallback(async () => {
     await navigator.clipboard.writeText(sqlText);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
-  }
+  }, [sqlText]);
 
   if (controls.length === 0) {
     return (
@@ -46,7 +68,7 @@ export default function SqlPanel({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex h-full flex-col gap-4 overflow-auto">
       <div className="flex items-center gap-2">
         <label className="text-sm font-medium">Event id (tavid):</label>
         <input
@@ -59,16 +81,16 @@ export default function SqlPanel({
 
       <div className="overflow-x-auto rounded border border-gray-200">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs text-gray-500">
+          <thead className="bg-gray-50 text-left text-xs text-gray-600">
             <tr className="border-b border-gray-200">
-              <th className="px-2 py-1.5">Control</th>
-              <th className="px-2 py-1.5">liveresultat code</th>
-              <th className="px-2 py-1.5">Name</th>
-              <th className="px-2 py-1.5">corder</th>
+              <SortTh label="Control" sortKey="control" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5" />
+              <SortTh label="liveresultat code" sortKey="code" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5" />
+              <SortTh label="Name" sortKey="name" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5" />
+              <SortTh label="corder" sortKey="corder" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5" />
             </tr>
           </thead>
           <tbody>
-            {controls.map((rc) => (
+            {sorted.map((rc) => (
               <tr key={rc.control} className="border-b border-gray-100">
                 <td className="px-2 py-1 font-semibold tabular-nums">
                   {rc.control}
@@ -76,9 +98,7 @@ export default function SqlPanel({
                 <td className="px-2 py-1">
                   <input
                     value={rc.code}
-                    onChange={(e) =>
-                      onUpdate(rc.control, { code: e.target.value })
-                    }
+                    onChange={(e) => onUpdate(rc.control, { code: e.target.value })}
                     placeholder={rc.control}
                     className="w-28 rounded border border-gray-300 px-2 py-0.5 text-sm tabular-nums"
                   />
@@ -86,9 +106,7 @@ export default function SqlPanel({
                 <td className="px-2 py-1">
                   <input
                     value={rc.name}
-                    onChange={(e) =>
-                      onUpdate(rc.control, { name: e.target.value })
-                    }
+                    onChange={(e) => onUpdate(rc.control, { name: e.target.value })}
                     placeholder="e.g. Prewarning"
                     className="w-48 rounded border border-gray-300 px-2 py-0.5 text-sm"
                   />
@@ -96,10 +114,9 @@ export default function SqlPanel({
                 <td className="px-2 py-1">
                   <input
                     value={rc.corder}
+                    aria-label={`corder for control ${rc.control}`}
                     onChange={(e) =>
-                      onUpdate(rc.control, {
-                        corder: Number(e.target.value) || 0,
-                      })
+                      onUpdate(rc.control, { corder: Number(e.target.value) || 0 })
                     }
                     className="w-16 rounded border border-gray-300 px-2 py-0.5 text-sm tabular-nums"
                   />
@@ -123,17 +140,11 @@ export default function SqlPanel({
       </div>
       <textarea
         readOnly
+        aria-label="Generated SQL statements"
         value={sqlText}
         spellCheck={false}
-        className="h-64 w-full rounded border border-gray-300 bg-gray-50 p-2 font-mono text-xs"
+        className="min-h-64 w-full flex-1 rounded border border-gray-300 bg-gray-50 p-2 font-mono text-xs"
       />
     </div>
   );
-}
-
-function numeric(a: string, b: string): number {
-  const na = Number(a);
-  const nb = Number(b);
-  if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
-  return a.localeCompare(b);
 }

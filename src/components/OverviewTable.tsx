@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { CourseRow } from "@/lib/types";
-import { buildOverview } from "@/lib/analysis";
+import { buildOverview, OverviewRow } from "@/lib/analysis";
+import { useTableSort } from "@/lib/sorting";
+import { radioColor } from "@/lib/heatmap";
+import SortTh from "./SortTh";
 
 interface Props {
   rows: CourseRow[];
@@ -15,6 +18,27 @@ export default function OverviewTable({ rows, controls }: Props) {
     [rows, controls],
   );
 
+  const getValue = useCallback(
+    (r: OverviewRow, key: string): number | string | null => {
+      if (key === "class") return r.className;
+      if (key === "course") return r.course;
+      if (key === "length") return r.length;
+      if (key.startsWith("c:")) {
+        const cell = r.cells[key.slice(2)];
+        return cell ? cell.ratio : null;
+      }
+      return "";
+    },
+    [],
+  );
+
+  const { sorted, sortKey, sortDir, toggle } = useTableSort(
+    overview,
+    getValue,
+    "length",
+    "desc",
+  );
+
   if (controls.length === 0) {
     return (
       <p className="p-4 text-sm text-gray-500">
@@ -25,24 +49,28 @@ export default function OverviewTable({ rows, controls }: Props) {
   }
 
   return (
-    <div className="overflow-x-auto rounded border border-gray-200">
+    <div className="h-full overflow-auto rounded border border-gray-200">
       <table className="min-w-max text-xs">
-        <thead className="sticky top-0 bg-gray-50">
+        <thead className="sticky top-0 z-10 bg-gray-50 text-gray-600">
           <tr className="border-b border-gray-200">
-            <th className="px-2 py-1.5 text-left font-semibold">Class</th>
-            <th className="px-2 py-1.5 text-left font-semibold">Course</th>
-            <th className="px-2 py-1.5 text-right font-semibold">Length</th>
+            <SortTh label="Class" sortKey="class" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5 text-left" />
+            <SortTh label="Course" sortKey="course" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5 text-left" />
+            <SortTh label="km" sortKey="length" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5 text-right" />
             {controls.map((c) => (
-              <th
+              <SortTh
                 key={c}
+                label={`${c} radio`}
+                sortKey={`c:${c}`}
+                activeKey={sortKey}
+                dir={sortDir}
+                onToggle={toggle}
                 colSpan={2}
-                className="border-l border-gray-200 px-2 py-1.5 text-center font-semibold"
-              >
-                {c} radio
-              </th>
+                color={radioColor(c)}
+                className="border-l border-gray-200 px-2 py-1.5 text-center"
+              />
             ))}
           </tr>
-          <tr className="border-b border-gray-200 text-[10px] text-gray-500">
+          <tr className="border-b border-gray-200 text-[10px] text-gray-400">
             <th></th>
             <th></th>
             <th></th>
@@ -55,7 +83,7 @@ export default function OverviewTable({ rows, controls }: Props) {
           </tr>
         </thead>
         <tbody>
-          {overview.map((r, i) => (
+          {sorted.map((r, i) => (
             <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
               <td className="px-2 py-1 font-medium">{r.className}</td>
               <td className="px-2 py-1 text-gray-500">{r.course}</td>
