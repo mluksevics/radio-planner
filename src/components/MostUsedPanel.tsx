@@ -42,8 +42,7 @@ export default function MostUsedPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-2 flex items-baseline justify-between">
-        <h2 className="text-sm font-semibold">Most used controls</h2>
+      <div className="mb-2 flex items-baseline justify-end">
         <span className="text-xs text-gray-500">{selectedCount} selected</span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto rounded border border-gray-200">

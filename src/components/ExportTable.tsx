@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CourseRow } from "@/lib/types";
 import { FINISH } from "@/lib/analysis";
 import { heatColor, heatText, radioColor } from "@/lib/heatmap";
@@ -17,9 +17,10 @@ interface Props {
   onReorder: (rows: CourseRow[]) => void;
 }
 
-const CLASS_W = "w-40";
 const LEN_W = "w-14";
 const CTRL_W = "w-[3.2rem]";
+const CLASS_MIN = 50;
+const CLASS_KEY = "radio-class-width";
 
 function getValue(row: CourseRow, key: string): number | string {
   switch (key) {
@@ -55,6 +56,35 @@ export default function ExportTable({
   const [sort, setSort] = useState<{ key: string; dir: SortDir } | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
+  const [classWidth, setClassWidth] = useState(150);
+  const classWidthRef = useRef(classWidth);
+  classWidthRef.current = classWidth;
+
+  useEffect(() => {
+    const w = Number(window.localStorage.getItem(CLASS_KEY));
+    if (Number.isFinite(w) && w >= CLASS_MIN) setClassWidth(w);
+  }, []);
+
+  const startClassResize = useCallback((e: React.MouseEvent) => {
+    const startX = e.clientX;
+    const startW = classWidthRef.current;
+    const onMove = (ev: MouseEvent) => {
+      const w = Math.min(500, Math.max(CLASS_MIN, startW + (ev.clientX - startX)));
+      setClassWidth(w);
+    };
+    const onUp = () => {
+      window.localStorage.setItem(
+        CLASS_KEY,
+        String(Math.round(classWidthRef.current)),
+      );
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = "";
+    };
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, []);
 
   const view = useMemo(() => {
     if (!sort) return rows;
@@ -111,16 +141,21 @@ export default function ExportTable({
       <div className="min-w-max">
         {/* header */}
         <div className="sticky top-0 z-20 flex items-stretch border-b border-gray-200 bg-gray-50 text-xs font-semibold text-gray-600">
-          <div className="sticky left-0 z-10 flex shrink-0 items-center gap-2 border-r border-gray-200 bg-gray-50 px-2 py-1.5">
-            <span className="w-4 text-gray-300" title="Drag rows to reorder">
+          <div className="sticky left-0 z-10 flex shrink-0 items-stretch gap-2 border-r border-gray-200 bg-gray-50 py-1.5 pl-2">
+            <span className="flex w-4 items-center text-gray-300" title="Drag rows to reorder">
               ⠿
             </span>
-            <span className={CLASS_W}>
+            <span className="flex items-center truncate" style={{ width: classWidth }}>
               <SortLabel k="class" label="Class" />
             </span>
-            <span className={`${LEN_W} text-right`}>
+            <span className={`${LEN_W} flex items-center justify-end text-right`}>
               <SortLabel k="length" label="km" />
             </span>
+            <div
+              onMouseDown={startClassResize}
+              title="Drag to resize class column"
+              className="w-1.5 cursor-col-resize self-stretch rounded bg-gray-200 hover:bg-blue-400"
+            />
           </div>
           <div className="flex items-center px-3 py-1.5 text-gray-400">
             <SortLabel k="controls" label="controls →" />
@@ -149,12 +184,13 @@ export default function ExportTable({
                   : ""
               } ${dragIndex === i ? "opacity-40" : ""}`}
             >
-              <div className="sticky left-0 z-10 flex shrink-0 items-center gap-2 border-r border-gray-200 bg-white px-2 py-1">
+              <div className="sticky left-0 z-10 flex shrink-0 items-center gap-2 border-r border-gray-200 bg-white py-1 pl-2">
                 <span className="w-4 cursor-grab text-gray-300 active:cursor-grabbing">
                   ⠿
                 </span>
                 <span
-                  className={`${CLASS_W} truncate text-xs font-semibold`}
+                  className="truncate text-xs font-semibold"
+                  style={{ width: classWidth }}
                   title={row.classLabel}
                 >
                   {row.classLabel}
@@ -164,6 +200,7 @@ export default function ExportTable({
                 >
                   {row.length}
                 </span>
+                <span className="w-1.5 shrink-0" />
               </div>
               <div className="flex items-stretch gap-0.5 py-1 pl-2">
                 <div

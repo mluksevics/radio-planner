@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useReducer, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { AppState, CourseRow, RadioControl } from "@/lib/types";
 import { parseCourses } from "@/lib/parse";
 import { controlUsage, usageRanks } from "@/lib/analysis";
@@ -77,13 +77,18 @@ function reducer(state: AppState, action: Action): AppState {
   }
 }
 
-type Tab = "export" | "overview" | "sql";
+type SideTab = "used" | "overview" | "sql";
+
+const SIDEBAR_MIN = 260;
+const SIDEBAR_KEY = "radio-sidebar-width";
 
 export default function Home() {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const [tab, setTab] = useState<Tab>("export");
+  const [sideTab, setSideTab] = useState<SideTab>("used");
   const [showData, setShowData] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(380);
+  const draggingRef = useRef(false);
 
   // hydrate from localStorage once on mount
   useEffect(() => {
@@ -99,6 +104,38 @@ export default function Home() {
   useEffect(() => {
     if (hydrated) saveLocal(state);
   }, [state, hydrated]);
+
+  // restore + persist sidebar width
+  useEffect(() => {
+    const w = Number(window.localStorage.getItem(SIDEBAR_KEY));
+    if (Number.isFinite(w) && w >= SIDEBAR_MIN) setSidebarWidth(w);
+  }, []);
+
+  const sidebarWidthRef = useRef(sidebarWidth);
+  sidebarWidthRef.current = sidebarWidth;
+
+  const startResize = useCallback(() => {
+    draggingRef.current = true;
+    const onMove = (e: MouseEvent) => {
+      if (!draggingRef.current) return;
+      const max = window.innerWidth * 0.75;
+      const w = Math.min(max, Math.max(SIDEBAR_MIN, window.innerWidth - e.clientX - 12));
+      setSidebarWidth(w);
+    };
+    const onUp = () => {
+      draggingRef.current = false;
+      window.localStorage.setItem(
+        SIDEBAR_KEY,
+        String(Math.round(sidebarWidthRef.current)),
+      );
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = "";
+    };
+    document.body.style.userSelect = "none";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }, []);
 
   const usage = useMemo(() => controlUsage(state.rows), [state.rows]);
   const usageMap = useMemo(() => {
@@ -178,44 +215,57 @@ export default function Home() {
         </div>
       </header>
 
-      <nav className="flex gap-1 border-b border-gray-200 print:hidden">
-        {(
-          [
-            ["export", "Export"],
-            ["overview", "Overview"],
-            ["sql", "SQL"],
-          ] as [Tab, string][]
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium ${
-              tab === key
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-800"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
+      <div className="flex min-h-0 flex-1 gap-0 print:block print:min-h-0">
+        {/* main export view — always visible */}
+        <div className="min-w-0 flex-1 print:w-full">
+          <ExportTable
+            rows={state.rows}
+            selection={state.selection}
+            usage={usageMap}
+            heatRank={heatRank}
+            maxRank={maxRank}
+            heatmap={state.heatmap}
+            onToggle={(control) => dispatch({ type: "TOGGLE_CONTROL", control })}
+            onReorder={(rows) => dispatch({ type: "REORDER_ROWS", rows })}
+          />
+        </div>
 
-      <div className="min-h-0 flex-1 print:min-h-0 print:flex-none">
-        {tab === "export" && (
-          <div className="grid h-full min-h-0 grid-cols-1 gap-3 lg:grid-cols-[1fr_360px]">
-            <ExportTable
-              rows={state.rows}
-              selection={state.selection}
-              usage={usageMap}
-              heatRank={heatRank}
-              maxRank={maxRank}
-              heatmap={state.heatmap}
-              onToggle={(control) =>
-                dispatch({ type: "TOGGLE_CONTROL", control })
-              }
-              onReorder={(rows) => dispatch({ type: "REORDER_ROWS", rows })}
-            />
-            <aside className="min-h-0 print:hidden">
+        {/* resize handle */}
+        <div
+          onMouseDown={startResize}
+          className="mx-1 w-1.5 shrink-0 cursor-col-resize rounded bg-gray-200 hover:bg-blue-400 print:hidden"
+          title="Drag to resize"
+        />
+
+        {/* tabbed sidebar */}
+        <aside
+          style={{ width: sidebarWidth }}
+          className="flex min-h-0 shrink-0 flex-col print:hidden"
+        >
+          <nav className="flex shrink-0 gap-1 border-b border-gray-200">
+            {(
+              [
+                ["used", "Most used controls"],
+                ["overview", "Overview"],
+                ["sql", "SQL"],
+              ] as [SideTab, string][]
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setSideTab(key)}
+                className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium whitespace-nowrap ${
+                  sideTab === key
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-800"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="min-h-0 flex-1 pt-2">
+            {sideTab === "used" && (
               <MostUsedPanel
                 usage={usage}
                 heatRank={heatRank}
@@ -225,27 +275,25 @@ export default function Home() {
                   dispatch({ type: "TOGGLE_CONTROL", control })
                 }
               />
-            </aside>
+            )}
+            {sideTab === "overview" && (
+              <OverviewTable rows={state.rows} controls={selectedControls} />
+            )}
+            {sideTab === "sql" && (
+              <SqlPanel
+                rows={state.rows}
+                selection={state.selection}
+                eventId={state.eventId}
+                onUpdate={(control, patch) =>
+                  dispatch({ type: "UPDATE_RC", control, patch })
+                }
+                onSetEventId={(eventId) =>
+                  dispatch({ type: "SET_EVENT_ID", eventId })
+                }
+              />
+            )}
           </div>
-        )}
-
-        {tab === "overview" && (
-          <OverviewTable rows={state.rows} controls={selectedControls} />
-        )}
-
-        {tab === "sql" && (
-          <SqlPanel
-            rows={state.rows}
-            selection={state.selection}
-            eventId={state.eventId}
-            onUpdate={(control, patch) =>
-              dispatch({ type: "UPDATE_RC", control, patch })
-            }
-            onSetEventId={(eventId) =>
-              dispatch({ type: "SET_EVENT_ID", eventId })
-            }
-          />
-        )}
+        </aside>
       </div>
     </main>
   );
