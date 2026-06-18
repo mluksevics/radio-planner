@@ -17,9 +17,9 @@ interface Props {
   onReorder: (rows: CourseRow[]) => void;
 }
 
-const CLASS_W = "w-56";
+const CLASS_W = "w-40";
 const LEN_W = "w-14";
-const CTRL_W = "w-16";
+const CTRL_W = "w-[3.2rem]";
 
 function getValue(row: CourseRow, key: string): number | string {
   switch (key) {
@@ -129,7 +129,6 @@ export default function ExportTable({
 
         {/* body */}
         {view.map((row, i) => {
-          let cum = 0;
           return (
             <div
               key={`${row.classLabel}-${row.course}-${i}`}
@@ -175,14 +174,11 @@ export default function ExportTable({
                   </span>
                 </div>
                 {row.legs.map((leg, j) => {
-                  cum += leg.dist;
                   const isFinish = leg.code === FINISH;
                   const selected = !isFinish && leg.code in selection;
                   const count = usage.get(leg.code) ?? 0;
                   const rank = heatRank.get(leg.code) ?? 0;
                   const heat = heatmap && !isFinish;
-                  const pct =
-                    row.length > 0 ? Math.round((cum / row.length) * 100) : 0;
                   const style = selected
                     ? { backgroundColor: radioColor(leg.code), color: "#fff" }
                     : heat
@@ -213,14 +209,6 @@ export default function ExportTable({
                         >
                           {leg.code}
                         </button>
-                      )}
-                      {selected && (
-                        <span
-                          className="text-[9px] font-semibold tabular-nums"
-                          style={{ color: radioColor(leg.code) }}
-                        >
-                          {pct}%
-                        </span>
                       )}
                     </div>
                   );
