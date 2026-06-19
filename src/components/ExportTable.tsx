@@ -23,14 +23,21 @@ const CLASS_MIN = 50;
 const CLASS_KEY = "radio-class-width";
 
 // stretched-layout geometry (px)
-const TRACK_W = 860;
 const BOX_W = 50;
 const BOX_H = 24;
-// minimum left-to-left step so boxes never overlap and numbers stay readable
-const MIN_STEP = BOX_W + 4;
+// the shortest leg maps to this many px (so its two boxes just touch and stay
+// readable); every longer leg scales up proportionally from there.
+const MIN_GAP = BOX_W;
 const LAYOUT_KEY = "radio-ctrl-layout";
 
 type LayoutMode = "even" | "scaled" | "fill";
+
+interface Cell {
+  code: string;
+  kind: "start" | "control" | "finish";
+  cum: number;
+  pct: number;
+}
 
 function getValue(row: CourseRow, key: string): number | string {
   switch (key) {
@@ -114,15 +121,13 @@ export default function ExportTable({
     return indexed.map((p) => p[0]);
   }, [rows, sort]);
 
-  // longest course (by summed legs) for the "scaled" layout denominator
-  const maxTotal = useMemo(
-    () =>
-      rows.reduce(
-        (m, r) => Math.max(m, r.legs.reduce((s, l) => s + l.dist, 0)),
-        0,
-      ) || 1,
-    [rows],
-  );
+  // shortest leg across all courses → the px/km scale for the "scaled" layout
+  const globalMinLeg = useMemo(() => {
+    let m = Infinity;
+    for (const r of rows)
+      for (const l of r.legs) if (l.dist > 0 && l.dist < m) m = l.dist;
+    return Number.isFinite(m) ? m : 1;
+  }, [rows]);
 
   function toggleSort(key: string) {
     setSort((s) =>
@@ -166,11 +171,7 @@ export default function ExportTable({
   );
 
   // the inner control glyph (button for controls, plain chip for start/finish)
-  function cellInner(
-    code: string,
-    kind: "start" | "control" | "finish",
-    pct: number,
-  ) {
+  function cellInner(code: string, kind: Cell["kind"], pct: number) {
     if (kind !== "control") {
       return (
         <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600">
@@ -207,14 +208,9 @@ export default function ExportTable({
   }
 
   // start + legs of a row with cumulative distance and % into the course
-  function rowCells(row: CourseRow) {
+  function rowCells(row: CourseRow): { cells: Cell[]; total: number } {
     const total = row.legs.reduce((s, l) => s + l.dist, 0) || 1;
-    const cells: {
-      code: string;
-      kind: "start" | "control" | "finish";
-      cum: number;
-      pct: number;
-    }[] = [{ code: row.start, kind: "start", cum: 0, pct: 0 }];
+    const cells: Cell[] = [{ code: row.start, kind: "start", cum: 0, pct: 0 }];
     let cum = 0;
     for (const leg of row.legs) {
       cum += leg.dist;
@@ -228,19 +224,38 @@ export default function ExportTable({
     return { cells, total };
   }
 
-  // x-position (px) of each cell in a stretched layout, pushed right so boxes
-  // keep at least MIN_STEP apart (never overlap → readable, scrolls wider).
+  // x of each cell in a stretched layout: true distance-proportional, scaled so
+  // the shortest leg = MIN_GAP px (everything longer scales up → wider, scrolls).
+  // "fill" scales per course (its own shortest leg); "scaled" uses one px/km
+  // across all courses so distances are comparable row-to-row.
   function placedCells(row: CourseRow) {
     const { cells, total } = rowCells(row);
-    const denom = layoutMode === "fill" ? total : maxTotal;
-    let prev = -Infinity;
-    const placed = cells.map((c) => {
-      let x = (c.cum / denom) * TRACK_W;
-      if (x < prev + MIN_STEP) x = prev + MIN_STEP;
-      prev = x;
-      return { ...c, x };
-    });
-    return { placed, contentW: prev + BOX_W };
+    let rowMin = Infinity;
+    for (const l of row.legs) if (l.dist > 0 && l.dist < rowMin) rowMin = l.dist;
+    const minLeg =
+      layoutMode === "fill"
+        ? Number.isFinite(rowMin)
+          ? rowMin
+          : 1
+        : globalMinLeg;
+    const scale = MIN_GAP / minLeg; // px per km
+    const placed = cells.map((c) => ({ ...c, x: c.cum * scale }));
+    const prev = placed.length ? placed[placed.length - 1].x : 0;
+    const contentW = prev + BOX_W;
+    // interpolate the x (box centre) for a given % into the course (fill mode)
+    const gridCenter = (p: number): number => {
+      const target = p * total;
+      for (let i = 1; i < placed.length; i++) {
+        if (placed[i].cum >= target) {
+          const a = placed[i - 1];
+          const b = placed[i];
+          const t = b.cum > a.cum ? (target - a.cum) / (b.cum - a.cum) : 0;
+          return a.x + t * (b.x - a.x) + BOX_W / 2;
+        }
+      }
+      return prev + BOX_W / 2;
+    };
+    return { placed, contentW, gridCenter };
   }
 
   return (
@@ -294,8 +309,8 @@ export default function ExportTable({
             {layoutMode !== "even" && (
               <span className="text-[10px] font-normal text-gray-400">
                 {layoutMode === "fill"
-                  ? "each course fills the width (by leg distance) · close controls may overlap"
-                  : "scaled to the longest course · close controls may overlap"}
+                  ? "each course fills the width by leg distance (min 50px/control)"
+                  : "scaled to the longest course (min 50px/control)"}
               </span>
             )}
           </div>
@@ -337,17 +352,17 @@ export default function ExportTable({
                 <span
                   className={`${LEN_W} text-right text-xs tabular-nums text-gray-500`}
                 >
-                  {row.length}
+                  {row.length.toFixed(2)}
                 </span>
                 <span className="w-1.5 shrink-0" />
               </div>
 
               {layoutMode === "even" ? (
                 <div className="flex items-stretch gap-0.5 py-1 pl-2">
-                  {rowCells(row).cells.map((c, j) => (
+                  {rowCells(row).cells.map((c, idx) => (
                     <div
-                      key={j}
-                      className={`flex ${CTRL_W} shrink-0 flex-col items-center justify-start gap-0.5`}
+                      key={idx}
+                      className={`flex ${CTRL_W} shrink-0 flex-col items-center justify-start`}
                     >
                       {cellInner(c.code, c.kind, c.pct)}
                     </div>
@@ -355,22 +370,19 @@ export default function ExportTable({
                 </div>
               ) : (
                 (() => {
-                  const { placed, contentW } = placedCells(row);
+                  const { placed, contentW, gridCenter } = placedCells(row);
                   return (
                     <div className="py-1 pl-2">
                       <div
                         className="relative"
-                        style={{
-                          width: Math.max(contentW, TRACK_W + BOX_W),
-                          height: BOX_H,
-                        }}
+                        style={{ width: contentW, height: BOX_H }}
                       >
                         {layoutMode === "fill" &&
                           [0.25, 0.5, 0.75].map((p) => (
                             <div
                               key={p}
                               className="absolute top-0 bottom-0 border-l border-dashed border-gray-200"
-                              style={{ left: BOX_W / 2 + p * TRACK_W }}
+                              style={{ left: gridCenter(p) }}
                             >
                               <span className="absolute top-0 left-0.5 text-[8px] text-gray-300">
                                 {p * 100}%
