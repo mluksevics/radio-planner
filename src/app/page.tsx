@@ -33,6 +33,7 @@ type Action =
   | { type: "SET_EVENT_ID"; eventId: string }
   | { type: "TOGGLE_HEATMAP" }
   | { type: "REORDER_ROWS"; rows: CourseRow[] }
+  | { type: "CLEAR_ALL" }
   | { type: "LOAD_STATE"; state: AppState };
 
 const initialState: AppState = {
@@ -88,6 +89,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, eventId: action.eventId };
     case "TOGGLE_HEATMAP":
       return { ...state, heatmap: !state.heatmap };
+    case "CLEAR_ALL":
+      return { ...initialState };
     case "LOAD_STATE":
       return action.state;
     default:
@@ -129,6 +132,21 @@ export default function Home() {
     } finally {
       setOcadBusy(false);
     }
+  }
+
+  function handleClearAll() {
+    if (
+      !window.confirm(
+        "Clear everything — courses, radio selection and the loaded map?",
+      )
+    )
+      return;
+    dispatch({ type: "CLEAR_ALL" });
+    setBackground(null);
+    setBgName(null);
+    setOcadError(null);
+    setShowData(false);
+    setMainTab("table");
   }
 
   async function handleBackground(file: File) {
@@ -274,6 +292,13 @@ export default function Home() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleClearAll}
+            className="rounded border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
+          >
+            Clear all
+          </button>
           <div className="relative">
             <button
               onClick={() => setShowData((v) => !v)}

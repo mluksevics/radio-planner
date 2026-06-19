@@ -32,7 +32,7 @@ export default function MapView({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [view, setView] = useState<View>({ k: 1, tx: 0, ty: 0 });
-  const fittedRef = useRef(false);
+  const lastFitRef = useRef<Bounds | null>(null);
 
   const codes = useMemo(() => Object.keys(coords), [coords]);
   const hasData = codes.length > 0;
@@ -105,13 +105,11 @@ export default function MapView({
       if (f.kind === "area") {
         ctx.fillStyle = f.color;
         ctx.beginPath();
-        for (const ring of f.coords as number[][][]) {
-          ring.forEach(([x, y], i) =>
-            i === 0 ? ctx.moveTo(px(x), py(y)) : ctx.lineTo(px(x), py(y)),
-          );
-          ctx.closePath();
-        }
-        ctx.fill("evenodd");
+        (f.coords as number[][]).forEach(([x, y], i) =>
+          i === 0 ? ctx.moveTo(px(x), py(y)) : ctx.lineTo(px(x), py(y)),
+        );
+        ctx.closePath();
+        ctx.fill();
       } else if (f.kind === "line") {
         ctx.strokeStyle = f.color;
         ctx.lineWidth = 1;
@@ -142,16 +140,15 @@ export default function MapView({
     });
   }, [worldBounds, baseScale, size]);
 
+  // (re)fit whenever the world bounds change (new course / background loaded)
+  // or once the container has been measured; manual pan/zoom leaves bounds
+  // unchanged so it is not overridden.
   useEffect(() => {
-    if (!fittedRef.current && worldBounds && size.w > 0) {
+    if (worldBounds && size.w > 0 && lastFitRef.current !== worldBounds) {
       fit();
-      fittedRef.current = true;
+      lastFitRef.current = worldBounds;
     }
   }, [worldBounds, size, fit]);
-  // refit when the dataset changes
-  useEffect(() => {
-    fittedRef.current = false;
-  }, [background, worldBounds]);
 
   // draw visible canvas
   useEffect(() => {
