@@ -198,7 +198,7 @@ export default function ExportTable({
                 <span
                   className={`${LEN_W} text-right text-xs tabular-nums text-gray-500`}
                 >
-                  {row.length}
+                  {row.length.toFixed(2)}
                 </span>
                 <span className="w-1.5 shrink-0" />
               </div>

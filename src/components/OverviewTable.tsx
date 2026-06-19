@@ -138,7 +138,7 @@ export default function OverviewTable({ rows, controls }: Props) {
               <td className="px-2 py-1 font-medium">{r.className}</td>
               <td className="px-2 py-1 text-gray-500">{r.course}</td>
               <td className="px-2 py-1 text-right tabular-nums text-gray-500">
-                {r.length}
+                {r.length.toFixed(2)}
               </td>
               {ordered.map((c) => {
                 const cell = r.cells[c];
