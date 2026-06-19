@@ -6,6 +6,7 @@ interface Props {
   initialText: string;
   onLoad: (text: string) => void;
   onLoadOcadCourse: (file: File) => void;
+  onLoadCoursesXml: (file: File) => void;
   onLoadBackground: (file: File) => void;
   backgroundName: string | null;
   ocadBusy: boolean;
@@ -16,6 +17,7 @@ export default function DataInput({
   initialText,
   onLoad,
   onLoadOcadCourse,
+  onLoadCoursesXml,
   onLoadBackground,
   backgroundName,
   ocadBusy,
@@ -25,6 +27,7 @@ export default function DataInput({
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const ocadRef = useRef<HTMLInputElement>(null);
+  const xmlRef = useRef<HTMLInputElement>(null);
   const bgRef = useRef<HTMLInputElement>(null);
 
   async function loadSample() {
@@ -55,6 +58,12 @@ export default function DataInput({
     if (ocadRef.current) ocadRef.current.value = "";
   }
 
+  function onXml(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) onLoadCoursesXml(file);
+    if (xmlRef.current) xmlRef.current.value = "";
+  }
+
   function onBackground(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) onLoadBackground(file);
@@ -65,7 +74,7 @@ export default function DataInput({
     <div className="flex flex-col gap-3">
       <div className="rounded border border-gray-200 bg-gray-50 p-2">
         <p className="mb-2 text-xs font-semibold text-gray-600">
-          OCAD course file — controls, courses and coordinates in one upload
+          Course file — controls, courses and coordinates in one upload
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <label className="cursor-pointer rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
@@ -76,6 +85,16 @@ export default function DataInput({
               accept=".ocd"
               className="hidden"
               onChange={onOcad}
+            />
+          </label>
+          <label className="cursor-pointer rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+            Upload courses .xml
+            <input
+              ref={xmlRef}
+              type="file"
+              accept=".xml"
+              className="hidden"
+              onChange={onXml}
             />
           </label>
           <label className="cursor-pointer rounded border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-white">

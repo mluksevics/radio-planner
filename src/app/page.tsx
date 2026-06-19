@@ -16,6 +16,7 @@ import {
 } from "@/lib/storage";
 import { exportXlsx } from "@/lib/excel";
 import { parseOcadCourse } from "@/lib/ocad";
+import { parseCoursesXml } from "@/lib/coursesXml";
 import { parseOcadBackground, OcadBackground } from "@/lib/ocadBackground";
 import Toolbar from "@/components/Toolbar";
 import DataInput from "@/components/DataInput";
@@ -129,6 +130,21 @@ export default function Home() {
     } catch (e) {
       console.error(e);
       setOcadError("Could not read this OCAD course file.");
+    } finally {
+      setOcadBusy(false);
+    }
+  }
+
+  async function handleCoursesXml(file: File) {
+    setOcadBusy(true);
+    setOcadError(null);
+    try {
+      const { rows, coords } = await parseCoursesXml(file);
+      dispatch({ type: "SET_OCAD", rows, coords });
+      setShowData(false);
+    } catch (e) {
+      console.error(e);
+      setOcadError("Could not read this courses XML file.");
     } finally {
       setOcadBusy(false);
     }
@@ -320,6 +336,7 @@ export default function Home() {
                       setShowData(false);
                     }}
                     onLoadOcadCourse={handleOcadCourse}
+                    onLoadCoursesXml={handleCoursesXml}
                     onLoadBackground={handleBackground}
                     backgroundName={bgName}
                     ocadBusy={ocadBusy}
