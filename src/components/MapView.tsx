@@ -2,14 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Coord, RadioControl } from "@/lib/types";
+import { LegUsage } from "@/lib/analysis";
 import { OcadBackground, Bounds } from "@/lib/ocadBackground";
 import { buildDistanceMatrix, FINISH } from "@/lib/distances";
-import { radioColor } from "@/lib/heatmap";
+import { heatColor, radioColor } from "@/lib/heatmap";
 
 interface Props {
   coords: Record<string, Coord>;
   background: OcadBackground | null;
   selection: Record<string, RadioControl>;
+  legs: LegUsage[];
+  legRank: Map<string, number>;
+  legMaxRank: number;
+  heatmap: boolean;
+  heatRank: Map<string, number>;
+  maxRank: number;
+  usage: Map<string, number>;
   onToggle: (control: string) => void;
 }
 
@@ -26,6 +34,13 @@ export default function MapView({
   coords,
   background,
   selection,
+  legs,
+  legRank,
+  legMaxRank,
+  heatmap,
+  heatRank,
+  maxRank,
+  usage,
   onToggle,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -33,6 +48,7 @@ export default function MapView({
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [view, setView] = useState<View>({ k: 1, tx: 0, ty: 0 });
   const [bgOpacity, setBgOpacity] = useState(0.7);
+  const [showLegs, setShowLegs] = useState(true);
   const lastFitRef = useRef<Bounds | null>(null);
 
   const codes = useMemo(() => Object.keys(coords), [coords]);
@@ -193,6 +209,34 @@ export default function MapView({
     });
   }, [codes, coords, toBasePx, view, selection]);
 
+  // leg segments (spiderweb) in screen space, colored by usage heat
+  const legSegments = useMemo(() => {
+    if (!showLegs) return [];
+    return legs.flatMap((l) => {
+      const pa = coords[l.a];
+      const pb = coords[l.b];
+      if (!pa || !pb) return [];
+      const [ax, ay] = toBasePx(pa);
+      const [bx, by] = toBasePx(pb);
+      const rank = legRank.get(l.key) ?? 0;
+      const t = legMaxRank > 0 ? rank / legMaxRank : 0;
+      return [
+        {
+          key: l.key,
+          x1: ax * view.k + view.tx,
+          y1: ay * view.k + view.ty,
+          x2: bx * view.k + view.tx,
+          y2: by * view.k + view.ty,
+          color: heatColor(rank, legMaxRank),
+          width: 1.5 + 4.5 * t,
+          count: l.count,
+          a: l.a,
+          b: l.b,
+        },
+      ];
+    });
+  }, [showLegs, legs, coords, toBasePx, view, legRank, legMaxRank]);
+
   const matrix = useMemo(
     () =>
       buildDistanceMatrix(
@@ -260,6 +304,21 @@ export default function MapView({
       >
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
         <svg className="pointer-events-none absolute inset-0 h-full w-full">
+          {legSegments.map((s) => (
+            <line
+              key={s.key}
+              x1={s.x1}
+              y1={s.y1}
+              x2={s.x2}
+              y2={s.y2}
+              stroke={s.color}
+              strokeWidth={s.width}
+              strokeLinecap="round"
+              opacity={0.8}
+            >
+              <title>{`${s.a}–${s.b}: ${s.count}×`}</title>
+            </line>
+          ))}
           {markers.map((m) => {
             if (m.start) {
               return (
@@ -282,6 +341,10 @@ export default function MapView({
               );
             }
             const color = m.selected ? radioColor(m.code) : "#7c3aed";
+            const heat =
+              heatmap && !m.selected
+                ? heatColor(heatRank.get(m.code) ?? 0, maxRank)
+                : null;
             return (
               <g
                 key={m.code}
@@ -292,12 +355,13 @@ export default function MapView({
                 }}
                 onMouseDown={(e) => e.stopPropagation()}
               >
+                <title>{`${m.code}: used ${usage.get(m.code) ?? 0}×`}</title>
                 <circle
                   cx={m.sx}
                   cy={m.sy}
                   r={m.selected ? 8 : 5}
-                  fill={m.selected ? color : "white"}
-                  fillOpacity={m.selected ? 0.85 : 0.6}
+                  fill={m.selected ? color : (heat ?? "white")}
+                  fillOpacity={m.selected ? 0.85 : heat ? 0.9 : 0.6}
                   stroke={color}
                   strokeWidth={m.selected ? 3 : 1.5}
                 />
@@ -317,13 +381,27 @@ export default function MapView({
             );
           })}
         </svg>
-        <button
-          type="button"
-          onClick={fit}
-          className="absolute left-2 top-2 rounded border border-gray-300 bg-white/90 px-2 py-1 text-xs font-medium shadow hover:bg-white"
-        >
-          Fit
-        </button>
+        <div className="absolute left-2 top-2 flex gap-1">
+          <button
+            type="button"
+            onClick={fit}
+            className="rounded border border-gray-300 bg-white/90 px-2 py-1 text-xs font-medium shadow hover:bg-white"
+          >
+            Fit
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowLegs((v) => !v)}
+            className={`rounded border px-2 py-1 text-xs font-medium shadow ${
+              showLegs
+                ? "border-amber-400 bg-amber-50 text-amber-800"
+                : "border-gray-300 bg-white/90 text-gray-600 hover:bg-white"
+            }`}
+            title="Show course legs heatmapped by usage"
+          >
+            Legs
+          </button>
+        </div>
         <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-white/80 px-2 py-1 text-[10px] text-gray-500">
           Scroll to zoom · drag to pan · click a control to toggle radio
         </div>

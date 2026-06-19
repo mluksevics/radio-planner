@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { AppState, CourseRow, RadioControl } from "@/lib/types";
 import { parseCourses } from "@/lib/parse";
-import { controlUsage, usageRanks } from "@/lib/analysis";
+import { controlUsage, usageRanks, legUsage, legUsageRanks } from "@/lib/analysis";
 import {
   loadLocal,
   saveLocal,
@@ -271,6 +271,11 @@ export default function Home() {
     return m;
   }, [usage]);
   const { rank: heatRank, maxRank } = useMemo(() => usageRanks(usage), [usage]);
+  const legs = useMemo(() => legUsage(state.rows), [state.rows]);
+  const { rank: legRank, maxRank: legMaxRank } = useMemo(
+    () => legUsageRanks(legs),
+    [legs],
+  );
   const selectedControls = useMemo(
     () =>
       Object.keys(state.selection).sort((a, b) => {
@@ -420,6 +425,13 @@ export default function Home() {
                 coords={state.coords}
                 background={background}
                 selection={state.selection}
+                legs={legs}
+                legRank={legRank}
+                legMaxRank={legMaxRank}
+                heatmap={state.heatmap}
+                heatRank={heatRank}
+                maxRank={maxRank}
+                usage={usageMap}
                 onToggle={(control) =>
                   dispatch({ type: "TOGGLE_CONTROL", control })
                 }

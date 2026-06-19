@@ -51,6 +51,61 @@ export function usageRanks(usage: ControlUsage[]): {
   return { rank, maxRank: distinct.length };
 }
 
+export interface LegUsage {
+  /** undirected key `${a}|${b}` with a/b deterministically ordered */
+  key: string;
+  a: string;
+  b: string;
+  /** number of classes whose course traverses this leg */
+  count: number;
+}
+
+const isStartCode = (code: string) => /^S\d+/.test(code);
+
+/**
+ * Count how often each control-to-control leg is traversed, weighted per class
+ * (a course shared by N classes contributes N). Legs are undirected, so 31-32
+ * and 32-31 collapse to one entry. Start and finish legs are excluded.
+ */
+export function legUsage(rows: CourseRow[]): LegUsage[] {
+  const map = new Map<string, { a: string; b: string; count: number }>();
+  for (const entry of expandClasses(rows)) {
+    const seen = new Set<string>();
+    let from = entry.row.start;
+    for (const leg of entry.row.legs) {
+      const to = leg.code;
+      const a = from;
+      from = to;
+      if (isStartCode(a) || a === FINISH || isStartCode(to) || to === FINISH) {
+        continue;
+      }
+      const [lo, hi] = a < to ? [a, to] : [to, a];
+      const key = `${lo}|${hi}`;
+      if (seen.has(key)) continue; // count a leg once per class
+      seen.add(key);
+      const e = map.get(key) ?? { a: lo, b: hi, count: 0 };
+      e.count += 1;
+      map.set(key, e);
+    }
+  }
+  return [...map.entries()]
+    .map(([key, e]) => ({ key, ...e }))
+    .sort((x, y) => y.count - x.count || numericCompare(x.a, y.a));
+}
+
+/** Dense rank of each leg by usage count, keyed by leg key. Mirrors {@link usageRanks}. */
+export function legUsageRanks(usage: LegUsage[]): {
+  rank: Map<string, number>;
+  maxRank: number;
+} {
+  const distinct = [...new Set(usage.map((u) => u.count))].sort((a, b) => a - b);
+  const rankOf = new Map<number, number>();
+  distinct.forEach((count, i) => rankOf.set(count, i + 1));
+  const rank = new Map<string, number>();
+  for (const u of usage) rank.set(u.key, rankOf.get(u.count) ?? 0);
+  return { rank, maxRank: distinct.length };
+}
+
 /** Cumulative distance (km) from start to the first occurrence of `control`, or null if absent. */
 export function cumulativeDistance(row: CourseRow, control: string): number | null {
   let total = 0;
