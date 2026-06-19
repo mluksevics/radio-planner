@@ -102,6 +102,7 @@ export default function MapView({
     const px = (x: number) => (x - minX) * baseScale;
     const py = (y: number) => (maxY - y) * baseScale;
     for (const f of background.features) {
+      ctx.globalAlpha = f.alpha;
       if (f.kind === "area") {
         ctx.fillStyle = f.color;
         ctx.beginPath();
