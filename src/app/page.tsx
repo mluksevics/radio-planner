@@ -15,15 +15,19 @@ import {
   currentShareId,
 } from "@/lib/storage";
 import { exportXlsx } from "@/lib/excel";
+import { parseOcadCourse } from "@/lib/ocad";
+import { parseOcadBackground, OcadBackground } from "@/lib/ocadBackground";
 import Toolbar from "@/components/Toolbar";
 import DataInput from "@/components/DataInput";
 import ExportTable from "@/components/ExportTable";
 import MostUsedPanel from "@/components/MostUsedPanel";
 import OverviewTable from "@/components/OverviewTable";
 import SqlPanel from "@/components/SqlPanel";
+import MapView from "@/components/MapView";
 
 type Action =
   | { type: "SET_DATA"; rawText: string }
+  | { type: "SET_OCAD"; rows: CourseRow[]; coords: AppState["coords"] }
   | { type: "TOGGLE_CONTROL"; control: string }
   | { type: "UPDATE_RC"; control: string; patch: Partial<RadioControl> }
   | { type: "SET_EVENT_ID"; eventId: string }
@@ -37,6 +41,7 @@ const initialState: AppState = {
   selection: {},
   eventId: "",
   heatmap: false,
+  coords: {},
 };
 
 function reducer(state: AppState, action: Action): AppState {
@@ -46,7 +51,11 @@ function reducer(state: AppState, action: Action): AppState {
       const rows = parseCourses(action.rawText).sort(
         (a, b) => b.length - a.length,
       );
-      return { ...state, rawText: action.rawText, rows };
+      return { ...state, rawText: action.rawText, rows, coords: {} };
+    }
+    case "SET_OCAD": {
+      const rows = [...action.rows].sort((a, b) => b.length - a.length);
+      return { ...state, rawText: "", rows, coords: action.coords };
     }
     case "REORDER_ROWS":
       return { ...state, rows: action.rows };
@@ -100,7 +109,42 @@ export default function Home() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [linkSaving, setLinkSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [mainTab, setMainTab] = useState<"table" | "map">("table");
+  const [background, setBackground] = useState<OcadBackground | null>(null);
+  const [bgName, setBgName] = useState<string | null>(null);
+  const [ocadBusy, setOcadBusy] = useState(false);
+  const [ocadError, setOcadError] = useState<string | null>(null);
   const draggingRef = useRef(false);
+
+  async function handleOcadCourse(file: File) {
+    setOcadBusy(true);
+    setOcadError(null);
+    try {
+      const { rows, coords } = await parseOcadCourse(file);
+      dispatch({ type: "SET_OCAD", rows, coords });
+      setShowData(false);
+    } catch (e) {
+      console.error(e);
+      setOcadError("Could not read this OCAD course file.");
+    } finally {
+      setOcadBusy(false);
+    }
+  }
+
+  async function handleBackground(file: File) {
+    setOcadBusy(true);
+    setOcadError(null);
+    try {
+      const bg = await parseOcadBackground(file);
+      setBackground(bg);
+      setBgName(file.name);
+    } catch (e) {
+      console.error(e);
+      setOcadError("Could not read this OCAD background map.");
+    } finally {
+      setOcadBusy(false);
+    }
+  }
 
   // hydrate on mount: /{id} shared link > URL hash > locally saved state
   useEffect(() => {
@@ -250,6 +294,11 @@ export default function Home() {
                       dispatch({ type: "SET_DATA", rawText: text });
                       setShowData(false);
                     }}
+                    onLoadOcadCourse={handleOcadCourse}
+                    onLoadBackground={handleBackground}
+                    backgroundName={bgName}
+                    ocadBusy={ocadBusy}
+                    ocadError={ocadError}
                   />
                 </div>
               </>
@@ -282,18 +331,54 @@ export default function Home() {
       )}
 
       <div className="flex min-h-0 flex-1 gap-0 print:block print:min-h-0">
-        {/* main export view — always visible */}
-        <div className="min-w-0 flex-1 print:w-full">
-          <ExportTable
-            rows={state.rows}
-            selection={state.selection}
-            usage={usageMap}
-            heatRank={heatRank}
-            maxRank={maxRank}
-            heatmap={state.heatmap}
-            onToggle={(control) => dispatch({ type: "TOGGLE_CONTROL", control })}
-            onReorder={(rows) => dispatch({ type: "REORDER_ROWS", rows })}
-          />
+        {/* main view — Table | Map */}
+        <div className="flex min-w-0 flex-1 flex-col print:w-full">
+          <nav className="flex shrink-0 gap-1 border-b border-gray-200 print:hidden">
+            {(
+              [
+                ["table", "Table"],
+                ["map", "Map"],
+              ] as ["table" | "map", string][]
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setMainTab(key)}
+                className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium ${
+                  mainTab === key
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-800"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+          <div className="min-h-0 flex-1 pt-2">
+            {mainTab === "table" ? (
+              <ExportTable
+                rows={state.rows}
+                selection={state.selection}
+                usage={usageMap}
+                heatRank={heatRank}
+                maxRank={maxRank}
+                heatmap={state.heatmap}
+                onToggle={(control) =>
+                  dispatch({ type: "TOGGLE_CONTROL", control })
+                }
+                onReorder={(rows) => dispatch({ type: "REORDER_ROWS", rows })}
+              />
+            ) : (
+              <MapView
+                coords={state.coords}
+                background={background}
+                selection={state.selection}
+                onToggle={(control) =>
+                  dispatch({ type: "TOGGLE_CONTROL", control })
+                }
+              />
+            )}
+          </div>
         </div>
 
         {/* resize handle */}

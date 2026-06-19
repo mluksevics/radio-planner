@@ -29,6 +29,12 @@ export interface RadioControl {
   corder: number;
 }
 
+/** A control position in projected map coordinates (EPSG of the OCAD file, metres). */
+export interface Coord {
+  x: number;
+  y: number;
+}
+
 export interface AppState {
   /** raw text last loaded (kept so we can re-show it in the data input) */
   rawText: string;
@@ -38,9 +44,15 @@ export interface AppState {
   /** shared liveresultat tavid / event id */
   eventId: string;
   heatmap: boolean;
+  /**
+   * Control positions from an OCAD course import, keyed by control code
+   * (plus start codes like "S1" and the finish "F1"). Empty for text imports.
+   * Small (~150 entries) so it is safe to persist and share.
+   */
+  coords: Record<string, Coord>;
 }
 
-export const APP_STATE_VERSION = 1;
+export const APP_STATE_VERSION = 2;
 
 export interface PersistedState extends AppState {
   version: number;
