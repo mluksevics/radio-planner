@@ -324,23 +324,34 @@ export default function MapView({
             </line>
           ))}
           {markers.map((m) => {
-            if (m.start) {
+            if (m.start || m.finish) {
               return (
                 <g key={m.code}>
-                  <polygon
-                    points={`${m.sx},${m.sy - 9} ${m.sx - 8},${m.sy + 6} ${m.sx + 8},${m.sy + 6}`}
-                    fill="none"
-                    stroke="#7c3aed"
-                    strokeWidth={2}
-                  />
-                </g>
-              );
-            }
-            if (m.finish) {
-              return (
-                <g key={m.code}>
-                  <circle cx={m.sx} cy={m.sy} r={8} fill="none" stroke="#7c3aed" strokeWidth={2} />
-                  <circle cx={m.sx} cy={m.sy} r={4} fill="none" stroke="#7c3aed" strokeWidth={2} />
+                  {m.start ? (
+                    <polygon
+                      points={`${m.sx},${m.sy - 9} ${m.sx - 8},${m.sy + 6} ${m.sx + 8},${m.sy + 6}`}
+                      fill="none"
+                      stroke="#7c3aed"
+                      strokeWidth={2}
+                    />
+                  ) : (
+                    <>
+                      <circle cx={m.sx} cy={m.sy} r={8} fill="none" stroke="#7c3aed" strokeWidth={2} />
+                      <circle cx={m.sx} cy={m.sy} r={4} fill="none" stroke="#7c3aed" strokeWidth={2} />
+                    </>
+                  )}
+                  <text
+                    x={m.sx + 11}
+                    y={m.sy - 6}
+                    fontSize={11}
+                    fontWeight={700}
+                    fill="#7c3aed"
+                    paintOrder="stroke"
+                    stroke="white"
+                    strokeWidth={3}
+                  >
+                    {m.code}
+                  </text>
                 </g>
               );
             }

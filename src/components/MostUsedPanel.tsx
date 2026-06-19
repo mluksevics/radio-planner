@@ -42,13 +42,19 @@ export default function MostUsedPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-2 flex items-baseline justify-end">
+      <div className="mb-2 flex items-baseline justify-end gap-3">
+        <span className="text-xs text-gray-500">
+          {usage.length} used controls
+        </span>
         <span className="text-xs text-gray-500">{selectedCount} selected</span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto rounded border border-gray-200">
         <table className="w-full text-xs">
           <thead className="sticky top-0 bg-gray-50 text-gray-600">
             <tr className="border-b border-gray-200 text-left">
+              <th className="px-2 py-1.5 text-right font-medium text-gray-400">
+                №
+              </th>
               <SortTh
                 label="Ctrl"
                 sortKey="control"
@@ -79,12 +85,12 @@ export default function MostUsedPanel({
           <tbody>
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={4} className="p-3 text-gray-500">
+                <td colSpan={5} className="p-3 text-gray-500">
                   No data.
                 </td>
               </tr>
             )}
-            {sorted.map((u) => {
+            {sorted.map((u, i) => {
               const selected = u.control in selection;
               return (
                 <tr
@@ -95,6 +101,9 @@ export default function MostUsedPanel({
                   }`}
                   title={u.classes.join(" ")}
                 >
+                  <td className="px-2 py-1 text-right tabular-nums text-gray-400">
+                    {i + 1}
+                  </td>
                   <td className="px-2 py-1">
                     <span className="inline-flex items-center gap-1.5">
                       <span
