@@ -5,7 +5,7 @@ import { Coord, RadioControl } from "@/lib/types";
 import { LegUsage } from "@/lib/analysis";
 import { OcadBackground, Bounds } from "@/lib/ocadBackground";
 import { buildDistanceMatrix, FINISH } from "@/lib/distances";
-import { heatColor, radioColor } from "@/lib/heatmap";
+import { heatColor, radioColor, HeatScheme } from "@/lib/heatmap";
 
 interface Props {
   coords: Record<string, Coord>;
@@ -51,6 +51,7 @@ export default function MapView({
   // fraction of the rank scale at which heat saturates to red (lower = top
   // legs/controls all red, finer gradient among the less-used ones)
   const [heatCeil, setHeatCeil] = useState(1);
+  const [heatScheme, setHeatScheme] = useState<HeatScheme>("red");
   const lastFitRef = useRef<Bounds | null>(null);
 
   const codes = useMemo(() => Object.keys(coords), [coords]);
@@ -230,7 +231,7 @@ export default function MapView({
           y1: ay * view.k + view.ty,
           x2: bx * view.k + view.tx,
           y2: by * view.k + view.ty,
-          color: heatColor(rank, effMax),
+          color: heatColor(rank, effMax, heatScheme),
           width: 1.5 + 4.5 * t,
           count: l.count,
           a: l.a,
@@ -238,7 +239,7 @@ export default function MapView({
         },
       ];
     });
-  }, [showLegs, legs, coords, toBasePx, view, legRank, legMaxRank, heatCeil]);
+  }, [showLegs, legs, coords, toBasePx, view, legRank, legMaxRank, heatCeil, heatScheme]);
 
   const matrix = useMemo(
     () =>
@@ -319,7 +320,7 @@ export default function MapView({
               strokeLinecap="round"
               opacity={0.8}
             >
-              <title>{`${s.a}–${s.b}: ${s.count}×`}</title>
+              <title>{`${s.a}–${s.b}: used in ${s.count} ${s.count === 1 ? "class" : "classes"}`}</title>
             </line>
           ))}
           {markers.map((m) => {
@@ -349,6 +350,7 @@ export default function MapView({
                 ? heatColor(
                     heatRank.get(m.code) ?? 0,
                     Math.max(1, Math.round(maxRank * heatCeil)),
+                    heatScheme,
                   )
                 : null;
             return (
@@ -361,7 +363,9 @@ export default function MapView({
                 }}
                 onMouseDown={(e) => e.stopPropagation()}
               >
-                <title>{`${m.code}: used ${usage.get(m.code) ?? 0}×`}</title>
+                <title>{`${m.code}: used in ${usage.get(m.code) ?? 0} ${
+                  (usage.get(m.code) ?? 0) === 1 ? "class" : "classes"
+                }`}</title>
                 <circle
                   cx={m.sx}
                   cy={m.sy}
@@ -440,6 +444,18 @@ export default function MapView({
               <span className="w-8 text-right tabular-nums">
                 {Math.round(heatCeil * 100)}%
               </span>
+              <select
+                value={heatScheme}
+                onChange={(e) => setHeatScheme(e.target.value as HeatScheme)}
+                className="rounded border border-gray-300 bg-white px-1 py-0.5 text-[11px]"
+                aria-label="Heat color"
+                title="Heatmap color"
+              >
+                <option value="red">Red</option>
+                <option value="blue">Blue</option>
+                <option value="magenta">Magenta</option>
+                <option value="green">Green</option>
+              </select>
             </div>
           )}
         </div>

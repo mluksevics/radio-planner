@@ -34,6 +34,20 @@ export function usageCountMap(rows: CourseRow[]): Map<string, number> {
   return m;
 }
 
+/** Count how many classes' courses include each control (per class, excluding the finish). */
+export function classControlCount(rows: CourseRow[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const entry of expandClasses(rows)) {
+    const seen = new Set<string>();
+    for (const leg of entry.row.legs) {
+      if (leg.code === FINISH || seen.has(leg.code)) continue;
+      seen.add(leg.code);
+      m.set(leg.code, (m.get(leg.code) ?? 0) + 1);
+    }
+  }
+  return m;
+}
+
 /**
  * Dense rank of each control by usage count: the lowest distinct count is rank 1,
  * the next distinct count rank 2, etc. e.g. counts {27,12,11} -> {27:3, 12:2, 11:1}.
@@ -60,12 +74,10 @@ export interface LegUsage {
   count: number;
 }
 
-const isStartCode = (code: string) => /^S\d+/.test(code);
-
 /**
- * Count how often each control-to-control leg is traversed, weighted per class
- * (a course shared by N classes contributes N). Legs are undirected, so 31-32
- * and 32-31 collapse to one entry. Start and finish legs are excluded.
+ * Count how often each leg is traversed, weighted per class (a course shared by
+ * N classes contributes N). Includes start→first-control and last-control→finish
+ * legs. Legs are undirected, so 31-32 and 32-31 collapse to one entry.
  */
 export function legUsage(rows: CourseRow[]): LegUsage[] {
   const map = new Map<string, { a: string; b: string; count: number }>();
@@ -76,9 +88,6 @@ export function legUsage(rows: CourseRow[]): LegUsage[] {
       const to = leg.code;
       const a = from;
       from = to;
-      if (isStartCode(a) || a === FINISH || isStartCode(to) || to === FINISH) {
-        continue;
-      }
       const [lo, hi] = a < to ? [a, to] : [to, a];
       const key = `${lo}|${hi}`;
       if (seen.has(key)) continue; // count a leg once per class
