@@ -428,7 +428,6 @@ export default function Home() {
                 legs={legs}
                 legRank={legRank}
                 legMaxRank={legMaxRank}
-                heatmap={state.heatmap}
                 heatRank={heatRank}
                 maxRank={maxRank}
                 usage={usageMap}

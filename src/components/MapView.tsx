@@ -14,7 +14,6 @@ interface Props {
   legs: LegUsage[];
   legRank: Map<string, number>;
   legMaxRank: number;
-  heatmap: boolean;
   heatRank: Map<string, number>;
   maxRank: number;
   usage: Map<string, number>;
@@ -37,7 +36,6 @@ export default function MapView({
   legs,
   legRank,
   legMaxRank,
-  heatmap,
   heatRank,
   maxRank,
   usage,
@@ -49,6 +47,10 @@ export default function MapView({
   const [view, setView] = useState<View>({ k: 1, tx: 0, ty: 0 });
   const [bgOpacity, setBgOpacity] = useState(0.7);
   const [showLegs, setShowLegs] = useState(true);
+  const [showControlHeat, setShowControlHeat] = useState(true);
+  // fraction of the rank scale at which heat saturates to red (lower = top
+  // legs/controls all red, finer gradient among the less-used ones)
+  const [heatCeil, setHeatCeil] = useState(1);
   const lastFitRef = useRef<Bounds | null>(null);
 
   const codes = useMemo(() => Object.keys(coords), [coords]);
@@ -212,6 +214,7 @@ export default function MapView({
   // leg segments (spiderweb) in screen space, colored by usage heat
   const legSegments = useMemo(() => {
     if (!showLegs) return [];
+    const effMax = Math.max(1, Math.round(legMaxRank * heatCeil));
     return legs.flatMap((l) => {
       const pa = coords[l.a];
       const pb = coords[l.b];
@@ -219,7 +222,7 @@ export default function MapView({
       const [ax, ay] = toBasePx(pa);
       const [bx, by] = toBasePx(pb);
       const rank = legRank.get(l.key) ?? 0;
-      const t = legMaxRank > 0 ? rank / legMaxRank : 0;
+      const t = Math.min(1, rank / effMax);
       return [
         {
           key: l.key,
@@ -227,7 +230,7 @@ export default function MapView({
           y1: ay * view.k + view.ty,
           x2: bx * view.k + view.tx,
           y2: by * view.k + view.ty,
-          color: heatColor(rank, legMaxRank),
+          color: heatColor(rank, effMax),
           width: 1.5 + 4.5 * t,
           count: l.count,
           a: l.a,
@@ -235,7 +238,7 @@ export default function MapView({
         },
       ];
     });
-  }, [showLegs, legs, coords, toBasePx, view, legRank, legMaxRank]);
+  }, [showLegs, legs, coords, toBasePx, view, legRank, legMaxRank, heatCeil]);
 
   const matrix = useMemo(
     () =>
@@ -342,8 +345,11 @@ export default function MapView({
             }
             const color = m.selected ? radioColor(m.code) : "#7c3aed";
             const heat =
-              heatmap && !m.selected
-                ? heatColor(heatRank.get(m.code) ?? 0, maxRank)
+              showControlHeat && !m.selected
+                ? heatColor(
+                    heatRank.get(m.code) ?? 0,
+                    Math.max(1, Math.round(maxRank * heatCeil)),
+                  )
                 : null;
             return (
               <g
@@ -381,7 +387,8 @@ export default function MapView({
             );
           })}
         </svg>
-        <div className="absolute left-2 top-2 flex gap-1">
+        <div className="absolute left-2 top-2 flex flex-col items-start gap-1">
+          <div className="flex gap-1">
           <button
             type="button"
             onClick={fit}
@@ -397,10 +404,44 @@ export default function MapView({
                 ? "border-amber-400 bg-amber-50 text-amber-800"
                 : "border-gray-300 bg-white/90 text-gray-600 hover:bg-white"
             }`}
-            title="Show course legs heatmapped by usage"
+            title="Color course legs by how often they are used"
           >
-            Legs
+            Legs heatmap
           </button>
+          <button
+            type="button"
+            onClick={() => setShowControlHeat((v) => !v)}
+            className={`rounded border px-2 py-1 text-xs font-medium shadow ${
+              showControlHeat
+                ? "border-amber-400 bg-amber-50 text-amber-800"
+                : "border-gray-300 bg-white/90 text-gray-600 hover:bg-white"
+            }`}
+            title="Color controls by how often they are used"
+          >
+            Controls heatmap
+          </button>
+          </div>
+          {(showLegs || showControlHeat) && (
+            <div
+              className="flex items-center gap-2 rounded border border-gray-300 bg-white/90 px-2 py-1 text-[11px] text-gray-600 shadow"
+              onMouseDown={(e) => e.stopPropagation()}
+              title="Lower the heat range so the most-used legs/controls saturate to red and the less-used ones spread across more colors"
+            >
+              <span className="whitespace-nowrap">Heat range</span>
+              <input
+                type="range"
+                min={20}
+                max={100}
+                value={Math.round(heatCeil * 100)}
+                onChange={(e) => setHeatCeil(Number(e.target.value) / 100)}
+                className="w-24"
+                aria-label="Heatmap upper range"
+              />
+              <span className="w-8 text-right tabular-nums">
+                {Math.round(heatCeil * 100)}%
+              </span>
+            </div>
+          )}
         </div>
         <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-white/80 px-2 py-1 text-[10px] text-gray-500">
           Scroll to zoom · drag to pan · click a control to toggle radio
