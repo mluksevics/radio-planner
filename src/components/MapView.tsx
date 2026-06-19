@@ -32,6 +32,7 @@ export default function MapView({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [view, setView] = useState<View>({ k: 1, tx: 0, ty: 0 });
+  const [bgOpacity, setBgOpacity] = useState(0.7);
   const lastFitRef = useRef<Bounds | null>(null);
 
   const codes = useMemo(() => Object.keys(coords), [coords]);
@@ -165,6 +166,7 @@ export default function MapView({
     ctx.fillRect(0, 0, size.w, size.h);
     if (offscreen) {
       ctx.imageSmoothingEnabled = true;
+      ctx.globalAlpha = bgOpacity;
       ctx.drawImage(
         offscreen,
         view.tx,
@@ -172,8 +174,9 @@ export default function MapView({
         offscreen.width * view.k,
         offscreen.height * view.k,
       );
+      ctx.globalAlpha = 1;
     }
-  }, [view, size, offscreen]);
+  }, [view, size, offscreen, bgOpacity]);
 
   // markers in screen space
   const markers = useMemo(() => {
@@ -324,6 +327,25 @@ export default function MapView({
         <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-white/80 px-2 py-1 text-[10px] text-gray-500">
           Scroll to zoom · drag to pan · click a control to toggle radio
         </div>
+        {background && (
+          <div
+            className="absolute bottom-2 right-2 flex items-center gap-2 rounded bg-white/90 px-2 py-1 text-[11px] text-gray-600 shadow"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <span>Map opacity</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(bgOpacity * 100)}
+              onChange={(e) => setBgOpacity(Number(e.target.value) / 100)}
+              className="w-28"
+            />
+            <span className="w-9 text-right tabular-nums">
+              {Math.round(bgOpacity * 100)}%
+            </span>
+          </div>
+        )}
       </div>
 
       <DistancePanel matrix={matrix} />
