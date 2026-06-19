@@ -6,7 +6,7 @@ hand‑pick the smallest set of controls that gives good radio coverage across a
 The selection stays **manual** — the app just makes it fast to see usage, fit and distances,
 and to produce the outputs an event needs (liveresultat SQL, Excel, print, share links).
 
-**Live:** https://orange-ground-02ee96b03.7.azurestaticapps.net
+**Live:** https://radio.luksevics.lv
 
 ---
 
