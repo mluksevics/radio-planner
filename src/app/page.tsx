@@ -33,6 +33,7 @@ type Action =
   | { type: "UPDATE_RC"; control: string; patch: Partial<RadioControl> }
   | { type: "SET_EVENT_ID"; eventId: string }
   | { type: "TOGGLE_HEATMAP" }
+  | { type: "SET_HZOOM"; hZoom: number }
   | { type: "REORDER_ROWS"; rows: CourseRow[] }
   | { type: "CLEAR_ALL" }
   | { type: "LOAD_STATE"; state: AppState };
@@ -43,6 +44,7 @@ const initialState: AppState = {
   selection: {},
   eventId: "",
   heatmap: false,
+  hZoom: 1,
   coords: {},
 };
 
@@ -90,6 +92,8 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, eventId: action.eventId };
     case "TOGGLE_HEATMAP":
       return { ...state, heatmap: !state.heatmap };
+    case "SET_HZOOM":
+      return { ...state, hZoom: action.hZoom };
     case "CLEAR_ALL":
       return { ...initialState };
     case "LOAD_STATE":
@@ -405,6 +409,8 @@ export default function Home() {
                 heatRank={heatRank}
                 maxRank={maxRank}
                 heatmap={state.heatmap}
+                hZoom={state.hZoom}
+                onHZoom={(hZoom) => dispatch({ type: "SET_HZOOM", hZoom })}
                 onToggle={(control) =>
                   dispatch({ type: "TOGGLE_CONTROL", control })
                 }

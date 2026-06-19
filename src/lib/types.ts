@@ -44,6 +44,8 @@ export interface AppState {
   /** shared liveresultat tavid / event id */
   eventId: string;
   heatmap: boolean;
+  /** horizontal density of the scaled/fill course table (1 = default) */
+  hZoom: number;
   /**
    * Control positions from an OCAD course import, keyed by control code
    * (plus start codes like "S1" and the finish "F1"). Empty for text imports.

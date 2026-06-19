@@ -107,6 +107,8 @@ function normalize(data: Partial<PersistedState>): AppState {
         : {},
     eventId: typeof data.eventId === "string" ? data.eventId : "",
     heatmap: Boolean(data.heatmap),
+    hZoom:
+      typeof data.hZoom === "number" && data.hZoom > 0 ? data.hZoom : 1,
     coords:
       data.coords && typeof data.coords === "object" ? data.coords : {},
   };

@@ -13,6 +13,8 @@ interface Props {
   heatRank: Map<string, number>;
   maxRank: number;
   heatmap: boolean;
+  hZoom: number;
+  onHZoom: (hZoom: number) => void;
   onToggle: (control: string) => void;
   onReorder: (rows: CourseRow[]) => void;
 }
@@ -62,6 +64,8 @@ export default function ExportTable({
   heatRank,
   maxRank,
   heatmap,
+  hZoom,
+  onHZoom,
   onToggle,
   onReorder,
 }: Props) {
@@ -195,11 +199,17 @@ export default function ExportTable({
     </button>
   );
 
-  // the inner control glyph (button for controls, plain chip for start/finish)
-  function cellInner(code: string, kind: Cell["kind"], pct: number) {
+  // the inner control glyph (button for controls, plain chip for start/finish).
+  // `wide`: stretched layouts where the box fills the gap → left-align the number
+  // at the control's actual position.
+  function cellInner(code: string, kind: Cell["kind"], pct: number, wide = false) {
     if (kind !== "control") {
       return (
-        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600">
+        <span
+          className={`rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600 ${
+            wide ? "block w-full text-left" : ""
+          }`}
+        >
           {code}
         </span>
       );
@@ -221,7 +231,9 @@ export default function ExportTable({
         onClick={() => onToggle(code)}
         style={style}
         title={`Control ${code} — used ${count}× · ${Math.round(pct)}% into course`}
-        className={`w-full rounded px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums transition ${
+        className={`w-full rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums transition ${
+          wide ? "text-left" : "text-center"
+        } ${
           selected
             ? "shadow-sm ring-1 ring-black/10"
             : "hover:ring-1 hover:ring-gray-300"
@@ -258,16 +270,27 @@ export default function ExportTable({
   //   directly comparable across courses (rows differ in width).
   function placedCells(row: CourseRow) {
     const { cells, total } = rowCells(row);
+    let xs: number[];
+    let contentW: number;
+    let gridCenter: (p: number) => number;
     if (layoutMode === "fill") {
-      const usable = step * fillRatio; // shared across all courses
-      const placed = cells.map((c) => ({ ...c, x: (c.cum / total) * usable }));
-      const gridCenter = (p: number): number => p * usable + boxW / 2;
-      return { placed, contentW: usable + boxW, gridCenter };
+      const usable = step * fillRatio * hZoom; // shared across all courses
+      xs = cells.map((c) => (c.cum / total) * usable);
+      contentW = usable + boxW;
+      gridCenter = (p) => p * usable + boxW / 2;
+    } else {
+      const scale = (step / globalMinLeg) * hZoom; // px per km, shared
+      xs = cells.map((c) => c.cum * scale);
+      contentW = (xs.length ? xs[xs.length - 1] : 0) + boxW;
+      gridCenter = (p) => p * total * scale + boxW / 2;
     }
-    const scale = step / globalMinLeg; // px per km, shared across courses
-    const placed = cells.map((c) => ({ ...c, x: c.cum * scale }));
-    const contentW = (placed.length ? placed[placed.length - 1].x : 0) + boxW;
-    const gridCenter = (p: number): number => p * total * scale + boxW / 2;
+    // each box fills the gap up to the next control (so the row fills the
+    // width); the last (finish) keeps a single box width.
+    const placed = cells.map((c, i) => ({
+      ...c,
+      x: xs[i],
+      w: i < xs.length - 1 ? Math.max(boxW, xs[i + 1] - xs[i]) : boxW,
+    }));
     return { placed, contentW, gridCenter };
   }
 
@@ -320,11 +343,28 @@ export default function ExportTable({
               ))}
             </div>
             {layoutMode !== "even" && (
-              <span className="text-[10px] font-normal text-gray-400">
-                {layoutMode === "fill"
-                  ? "every course fills the width · 25/50/75% marks align"
-                  : "spaced by distance, one scale for all courses"}
-              </span>
+              <>
+                <label
+                  className="flex items-center gap-1 text-[10px] font-normal text-gray-400"
+                  title="Compact or stretch the controls horizontally"
+                >
+                  compact
+                  <input
+                    type="range"
+                    min={20}
+                    max={150}
+                    value={Math.round(hZoom * 100)}
+                    onChange={(e) => onHZoom(Number(e.target.value) / 100)}
+                    className="w-28"
+                  />
+                  wide
+                </label>
+                <span className="text-[10px] font-normal text-gray-400">
+                  {layoutMode === "fill"
+                    ? "every course fills the width · 25/50/75% marks align"
+                    : "spaced by distance, one scale for all courses"}
+                </span>
+              </>
             )}
           </div>
         </div>
@@ -406,10 +446,10 @@ export default function ExportTable({
                         {placed.map((c, idx) => (
                           <div
                             key={idx}
-                            className="absolute top-0 flex justify-center"
-                            style={{ left: c.x, width: boxW }}
+                            className="absolute top-0 flex justify-start"
+                            style={{ left: c.x, width: c.w }}
                           >
-                            {cellInner(c.code, c.kind, c.pct)}
+                            {cellInner(c.code, c.kind, c.pct, true)}
                           </div>
                         ))}
                       </div>
