@@ -20,7 +20,6 @@ interface Props {
 }
 
 const LEN_W = "w-14";
-const CTRL_W = "w-[3.2rem]";
 const CLASS_MIN = 50;
 const CLASS_KEY = "radio-class-width";
 
@@ -423,7 +422,8 @@ export default function ExportTable({
                   {rowCells(row).cells.map((c, idx) => (
                     <div
                       key={idx}
-                      className={`flex ${CTRL_W} shrink-0 flex-col items-center justify-start`}
+                      style={{ width: boxW }}
+                      className="flex shrink-0 flex-col items-center justify-start"
                     >
                       {cellInner(c.code, c.kind, c.pct)}
                     </div>
