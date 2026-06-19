@@ -35,6 +35,8 @@ interface Cell {
   kind: "start" | "control" | "finish";
   cum: number;
   pct: number;
+  /** 1-based position among the course's controls (0 for start/finish) */
+  idx: number;
 }
 
 function getValue(row: CourseRow, key: string): number | string {
@@ -138,27 +140,31 @@ export default function ExportTable({
     return indexed.map((p) => p[0]);
   }, [rows, sort]);
 
-  // shortest leg across all courses → shared px/km scale for the "scaled" layout
-  const globalMinLeg = useMemo(() => {
-    let m = Infinity;
-    for (const r of rows)
-      for (const l of r.legs) if (l.dist > 0 && l.dist < m) m = l.dist;
-    return Number.isFinite(m) ? m : 1;
-  }, [rows]);
+  // longest course (summed legs) → reference for the "scaled" layout
+  const maxTotal = useMemo(
+    () =>
+      rows.reduce(
+        (m, r) => Math.max(m, r.legs.reduce((s, l) => s + l.dist, 0)),
+        0,
+      ) || 1,
+    [rows],
+  );
 
-  // box width = just enough to show the widest control code (e.g. "180")
+  // box width = just enough to show the widest control code (e.g. "180"), tight
   const boxW = useMemo(() => {
     let len = 2;
     for (const r of rows) {
       if (r.start.length > len) len = r.start.length;
       for (const l of r.legs) if (l.code.length > len) len = l.code.length;
     }
-    return Math.round(len * 7 + 12);
+    return Math.round(len * 6.5 + 6);
   }, [rows]);
-  // the shortest leg maps to one box width (+2px) so adjacent controls never
-  // overlap; every longer leg scales up from there → the row is exactly as wide
-  // as it needs to be for all numbers to be readable.
-  const step = boxW + 2;
+
+  // slider ↔ zoom: log scale, slider centre (pos 50) = zoom 1 = fills the
+  // available table width (same reference for Scaled and Fill).
+  const posToZoom = (p: number) => Math.pow(4, (p - 50) / 50);
+  const zoomToPos = (z: number) =>
+    Math.max(0, Math.min(100, Math.round(50 + (50 * Math.log(z)) / Math.log(4))));
 
   function toggleSort(key: string) {
     setSort((s) =>
@@ -204,11 +210,12 @@ export default function ExportTable({
   // the inner control glyph (button for controls, plain chip for start/finish).
   // `wide`: stretched layouts where the box fills the gap → left-align the number
   // at the control's actual position.
-  function cellInner(code: string, kind: Cell["kind"], pct: number, wide = false) {
+  function cellInner(c: Cell, nControls: number, wide = false) {
+    const { code, kind, cum, pct, idx } = c;
     if (kind !== "control") {
       return (
         <span
-          className={`rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600 ${
+          className={`rounded bg-gray-100 px-1 py-0.5 text-xs font-medium text-gray-600 ${
             wide ? "block w-full text-left" : ""
           }`}
         >
@@ -227,13 +234,20 @@ export default function ExportTable({
             color: heatText(rank, maxRank),
           }
         : undefined;
+    // native title renders "\n" as line breaks
+    const title = [
+      `Control ${code}`,
+      `control ${idx} of ${nControls} on this course`,
+      `${cum.toFixed(2)} km · ${Math.round(pct)}% into course`,
+      `used in ${count} course${count === 1 ? "" : "s"}`,
+    ].join("\n");
     return (
       <button
         type="button"
         onClick={() => onToggle(code)}
         style={style}
-        title={`Control ${code} — used ${count}× · ${Math.round(pct)}% into course`}
-        className={`w-full rounded px-1.5 py-0.5 text-xs font-semibold tabular-nums transition ${
+        title={title}
+        className={`w-full rounded px-1 py-0.5 text-xs font-semibold tabular-nums transition ${
           wide ? "text-left" : "text-center"
         } ${
           selected
@@ -246,21 +260,32 @@ export default function ExportTable({
     );
   }
 
-  // start + legs of a row with cumulative distance and % into the course
-  function rowCells(row: CourseRow): { cells: Cell[]; total: number } {
+  // start + legs of a row with cumulative distance, % and control index
+  function rowCells(row: CourseRow): {
+    cells: Cell[];
+    total: number;
+    nControls: number;
+  } {
     const total = row.legs.reduce((s, l) => s + l.dist, 0) || 1;
-    const cells: Cell[] = [{ code: row.start, kind: "start", cum: 0, pct: 0 }];
+    const nControls = row.legs.filter((l) => l.code !== FINISH).length;
+    const cells: Cell[] = [
+      { code: row.start, kind: "start", cum: 0, pct: 0, idx: 0 },
+    ];
     let cum = 0;
+    let idx = 0;
     for (const leg of row.legs) {
       cum += leg.dist;
+      const isFinish = leg.code === FINISH;
+      if (!isFinish) idx += 1;
       cells.push({
         code: leg.code,
-        kind: leg.code === FINISH ? "finish" : "control",
+        kind: isFinish ? "finish" : "control",
         cum,
         pct: (cum / total) * 100,
+        idx: isFinish ? 0 : idx,
       });
     }
-    return { cells, total };
+    return { cells, total, nControls };
   }
 
   // x of each cell in a stretched layout. Both modes guarantee no overlap
@@ -271,18 +296,20 @@ export default function ExportTable({
   // "scaled": one shared px/km (global shortest leg) so leg distances are
   //   directly comparable across courses (rows differ in width).
   function placedCells(row: CourseRow) {
-    const { cells, total } = rowCells(row);
+    const { cells, total, nControls } = rowCells(row);
     let xs: number[];
     let contentW: number;
     let gridCenter: (p: number) => number;
     if (layoutMode === "fill") {
-      // initial width fills the visible table; slider (hZoom) stretches from there
-      const usable = Math.max(boxW, availW * hZoom - boxW);
+      // hZoom 1 ⇒ every course fills the available table width
+      const usable = Math.max(boxW, (availW - boxW) * hZoom);
       xs = cells.map((c) => (c.cum / total) * usable);
       contentW = usable + boxW;
       gridCenter = (p) => p * usable + boxW / 2;
     } else {
-      const scale = (step / globalMinLeg) * hZoom; // px per km, shared
+      // hZoom 1 ⇒ the LONGEST course fills the available width; shorter courses
+      // end proportionally earlier (rows differ in width).
+      const scale = ((availW - boxW) / maxTotal) * hZoom; // px per km
       xs = cells.map((c) => c.cum * scale);
       contentW = (xs.length ? xs[xs.length - 1] : 0) + boxW;
       gridCenter = (p) => p * total * scale + boxW / 2;
@@ -294,7 +321,7 @@ export default function ExportTable({
       x: xs[i],
       w: i < xs.length - 1 ? Math.max(boxW, xs[i + 1] - xs[i]) : boxW,
     }));
-    return { placed, contentW, gridCenter };
+    return { placed, contentW, gridCenter, nControls };
   }
 
   return (
@@ -364,23 +391,23 @@ export default function ExportTable({
               <>
                 <label
                   className="flex items-center gap-1 text-[10px] font-normal text-gray-400"
-                  title="Compact or stretch the controls horizontally"
+                  title="Compact or stretch horizontally — centre fits the table width"
                 >
                   compact
                   <input
                     type="range"
-                    min={30}
-                    max={400}
-                    value={Math.round(hZoom * 100)}
-                    onChange={(e) => onHZoom(Number(e.target.value) / 100)}
-                    className="w-28"
+                    min={0}
+                    max={100}
+                    value={zoomToPos(hZoom)}
+                    onChange={(e) => onHZoom(posToZoom(Number(e.target.value)))}
+                    className="w-32"
                   />
                   wide
                 </label>
                 <span className="text-[10px] font-normal text-gray-400">
                   {layoutMode === "fill"
                     ? "every course fills the width · 25/50/75% marks align"
-                    : "spaced by distance, one scale for all courses"}
+                    : "scaled to the longest course"}
                 </span>
               </>
             )}
@@ -389,6 +416,7 @@ export default function ExportTable({
 
         {/* body */}
         {view.map((row, i) => {
+          const nControls = row.legs.filter((l) => l.code !== FINISH).length;
           return (
             <div
               key={`${row.classLabel}-${row.course}-${i}`}
@@ -416,7 +444,7 @@ export default function ExportTable({
                 <span
                   className="truncate text-xs font-semibold"
                   style={{ width: classWidth }}
-                  title={row.classLabel}
+                  title={`${row.classLabel}\n${row.course} · ${nControls} controls`}
                 >
                   {row.classLabel}
                 </span>
@@ -436,7 +464,7 @@ export default function ExportTable({
                       style={{ width: boxW }}
                       className="flex shrink-0 flex-col items-center justify-start"
                     >
-                      {cellInner(c.code, c.kind, c.pct)}
+                      {cellInner(c, nControls)}
                     </div>
                   ))}
                 </div>
@@ -468,7 +496,7 @@ export default function ExportTable({
                             className="absolute top-0 flex justify-start"
                             style={{ left: c.x, width: c.w }}
                           >
-                            {cellInner(c.code, c.kind, c.pct, true)}
+                            {cellInner(c, nControls, true)}
                           </div>
                         ))}
                       </div>

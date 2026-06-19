@@ -85,10 +85,18 @@ function parseV3(doc: Document): XmlCourseImport {
         code: type === "Finish" ? "F1" : code,
       });
     }
-    const classLabel =
-      (courseToClasses.get(name) ?? []).join(" ").trim() || name;
+    const classNames = courseToClasses.get(name) ?? [];
+    const classLabel = classNames.join(" ").trim() || name;
     rows.push(
-      buildRow(name, classLabel, start, legs, Number(childText(course, "Length")), Number(childText(course, "Climb"))),
+      buildRow(
+        name,
+        classLabel,
+        start,
+        legs,
+        Number(childText(course, "Length")),
+        Number(childText(course, "Climb")),
+        classNames.length ? classNames : [name],
+      ),
     );
   }
   return { rows, coords };
@@ -149,6 +157,7 @@ function parseV2(doc: Document): XmlCourseImport {
           legs,
           Number(childText(v, "CourseLength")),
           Number(childText(v, "CourseClimb")),
+          [classLabel],
         ),
       );
     }
@@ -163,13 +172,16 @@ function buildRow(
   legs: Leg[],
   lengthM: number,
   climb: number,
+  classes?: string[],
 ): CourseRow {
   const length =
     Number.isFinite(lengthM) && lengthM > 0
       ? round3(lengthM / 1000)
       : round3(legs.reduce((s, l) => s + l.dist, 0));
   return {
-    classes: classLabel.split(/\s+/).filter(Boolean),
+    // prefer the authoritative class list (XML gives real names that may
+    // contain spaces); only fall back to splitting the label by whitespace.
+    classes: classes?.length ? classes : classLabel.split(/\s+/).filter(Boolean),
     classLabel,
     course,
     length,

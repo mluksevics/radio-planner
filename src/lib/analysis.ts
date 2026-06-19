@@ -135,7 +135,7 @@ function sqlEscape(s: string): string {
  * Generate liveresultat splitcontrols INSERT statements: one row per passing of
  * a selected control within each class, walking the course in order.
  *  - code   = 1000 * passingNumber + controlNumber (1st pass of 53 → 1053, 2nd → 2053)
- *  - corder = order of the split within the class (1, 2, 3 … in course order)
+ *  - corder = order of the split within the class (0, 1, 2 … in course order)
  */
 export function buildSql(
   rows: CourseRow[],
@@ -152,10 +152,11 @@ export function buildSql(
     for (const leg of entry.row.legs) {
       cum += leg.dist;
       const rc = byControl.get(leg.code);
-      if (!rc) continue;
+      if (!rc) {
+        continue;
+      }
       const pass = (passCount.get(leg.code) ?? 0) + 1;
       passCount.set(leg.code, pass);
-      corder += 1;
       const controlNum = Number(leg.code);
       const codeVal = Number.isFinite(controlNum)
         ? String(1000 * pass + controlNum)
@@ -177,6 +178,7 @@ export function buildSql(
         name: fullName,
         statement,
       });
+      corder += 1;
     }
   }
   return out;

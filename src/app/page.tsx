@@ -51,15 +51,16 @@ const initialState: AppState = {
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "SET_DATA": {
-      // default order: longest course at the top
+      // default order: longest course at the top. New data clears the old
+      // selection/coords so stale radios don't linger in Overview/SQL.
       const rows = parseCourses(action.rawText).sort(
         (a, b) => b.length - a.length,
       );
-      return { ...state, rawText: action.rawText, rows, coords: {} };
+      return { ...state, rawText: action.rawText, rows, selection: {}, coords: {} };
     }
     case "SET_OCAD": {
       const rows = [...action.rows].sort((a, b) => b.length - a.length);
-      return { ...state, rawText: "", rows, coords: action.coords };
+      return { ...state, rawText: "", rows, selection: {}, coords: action.coords };
     }
     case "REORDER_ROWS":
       return { ...state, rows: action.rows };
