@@ -78,6 +78,22 @@ export default function ExportTable({
   const classWidthRef = useRef(classWidth);
   classWidthRef.current = classWidth;
 
+  // available track width, measured ONCE when data first appears. This is the
+  // initial Fill width (hZoom = 1 ⇒ fills the visible table); the slider then
+  // stretches from here. Not re-measured on window resize, on purpose.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const headRef = useRef<HTMLDivElement>(null);
+  const measuredRef = useRef(false);
+  const [availW, setAvailW] = useState(900);
+  useEffect(() => {
+    if (measuredRef.current || rows.length === 0) return;
+    const el = scrollRef.current;
+    const head = headRef.current;
+    if (!el || !head) return;
+    setAvailW(Math.max(240, el.clientWidth - head.offsetWidth - 16));
+    measuredRef.current = true;
+  }, [rows.length]);
+
   useEffect(() => {
     const w = Number(window.localStorage.getItem(CLASS_KEY));
     if (Number.isFinite(w) && w >= CLASS_MIN) setClassWidth(w);
@@ -142,21 +158,6 @@ export default function ExportTable({
   // overlap; every longer leg scales up from there → the row is exactly as wide
   // as it needs to be for all numbers to be readable.
   const step = boxW + 2;
-
-  // FILL uses one shared width for every course (so the 25/50/75% marks line up)
-  // wide enough that even the densest course (max total/shortest-leg ratio) has
-  // no overlap. Width in fraction units = this ratio × step.
-  const fillRatio = useMemo(() => {
-    let mx = 1;
-    for (const r of rows) {
-      const total = r.legs.reduce((s, l) => s + l.dist, 0) || 1;
-      let rmin = Infinity;
-      for (const l of r.legs) if (l.dist > 0 && l.dist < rmin) rmin = l.dist;
-      const ratio = total / (Number.isFinite(rmin) ? rmin : total);
-      if (ratio > mx) mx = ratio;
-    }
-    return mx;
-  }, [rows]);
 
   function toggleSort(key: string) {
     setSort((s) =>
@@ -274,7 +275,8 @@ export default function ExportTable({
     let contentW: number;
     let gridCenter: (p: number) => number;
     if (layoutMode === "fill") {
-      const usable = step * fillRatio * hZoom; // shared across all courses
+      // initial width fills the visible table; slider (hZoom) stretches from there
+      const usable = Math.max(boxW, availW * hZoom - boxW);
       xs = cells.map((c) => (c.cum / total) * usable);
       contentW = usable + boxW;
       gridCenter = (p) => p * usable + boxW / 2;
@@ -295,11 +297,17 @@ export default function ExportTable({
   }
 
   return (
-    <div className="h-full overflow-auto rounded border border-gray-200">
+    <div
+      ref={scrollRef}
+      className="h-full overflow-auto rounded border border-gray-200"
+    >
       <div className="min-w-max">
         {/* header */}
         <div className="sticky top-0 z-20 flex items-stretch border-b border-gray-200 bg-gray-50 text-xs font-semibold text-gray-600">
-          <div className="sticky left-0 z-10 flex shrink-0 items-stretch gap-2 border-r border-gray-200 bg-gray-50 py-1.5 pl-2">
+          <div
+            ref={headRef}
+            className="sticky left-0 z-10 flex shrink-0 items-stretch gap-2 border-r border-gray-200 bg-gray-50 py-1.5 pl-2"
+          >
             <span className="flex w-4 items-center text-gray-300" title="Drag rows to reorder">
               ⠿
             </span>
@@ -351,8 +359,8 @@ export default function ExportTable({
                   compact
                   <input
                     type="range"
-                    min={20}
-                    max={150}
+                    min={30}
+                    max={400}
                     value={Math.round(hZoom * 100)}
                     onChange={(e) => onHZoom(Number(e.target.value) / 100)}
                     className="w-28"
