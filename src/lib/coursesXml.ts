@@ -123,7 +123,11 @@ function parseV2(doc: Document): XmlCourseImport {
   const rows: CourseRow[] = [];
   for (const course of tags(doc, "Course")) {
     const name = childText(course, "CourseName");
-    const classLabel = childText(course, "ClassShortName") || name;
+    // a v2 course may list several classes, each its own <ClassShortName>
+    const classNames = tags(course, "ClassShortName")
+      .map((e) => (e.textContent ?? "").trim())
+      .filter(Boolean);
+    const classLabel = classNames.join(" ") || name;
     const variations = tags(course, "CourseVariation");
     for (const v of variations) {
       const start = childText(v, "StartPointCode") || "S1";
@@ -157,7 +161,7 @@ function parseV2(doc: Document): XmlCourseImport {
           legs,
           Number(childText(v, "CourseLength")),
           Number(childText(v, "CourseClimb")),
-          [classLabel],
+          classNames.length ? classNames : [classLabel],
         ),
       );
     }

@@ -35,6 +35,8 @@ interface Cell {
   kind: "start" | "control" | "finish";
   cum: number;
   pct: number;
+  /** length (km) of the leg arriving at this control */
+  leg: number;
   /** 1-based position among the course's controls (0 for start/finish) */
   idx: number;
 }
@@ -211,7 +213,7 @@ export default function ExportTable({
   // `wide`: stretched layouts where the box fills the gap → left-align the number
   // at the control's actual position.
   function cellInner(c: Cell, nControls: number, wide = false) {
-    const { code, kind, cum, pct, idx } = c;
+    const { code, kind, cum, pct, leg, idx } = c;
     if (kind !== "control") {
       return (
         <span
@@ -236,7 +238,7 @@ export default function ExportTable({
         : undefined;
     // native title renders "\n" as line breaks
     const title = [
-      `Control ${code}`,
+      `Control ${code} · leg ${leg.toFixed(2)} km`,
       `control ${idx} of ${nControls} on this course`,
       `${cum.toFixed(2)} km · ${Math.round(pct)}% into course`,
       `used in ${count} course${count === 1 ? "" : "s"}`,
@@ -269,7 +271,7 @@ export default function ExportTable({
     const total = row.legs.reduce((s, l) => s + l.dist, 0) || 1;
     const nControls = row.legs.filter((l) => l.code !== FINISH).length;
     const cells: Cell[] = [
-      { code: row.start, kind: "start", cum: 0, pct: 0, idx: 0 },
+      { code: row.start, kind: "start", cum: 0, pct: 0, leg: 0, idx: 0 },
     ];
     let cum = 0;
     let idx = 0;
@@ -282,6 +284,7 @@ export default function ExportTable({
         kind: isFinish ? "finish" : "control",
         cum,
         pct: (cum / total) * 100,
+        leg: leg.dist,
         idx: isFinish ? 0 : idx,
       });
     }
