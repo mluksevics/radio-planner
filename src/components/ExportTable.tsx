@@ -22,6 +22,14 @@ const CTRL_W = "w-[3.2rem]";
 const CLASS_MIN = 50;
 const CLASS_KEY = "radio-class-width";
 
+// stretched-layout geometry (px)
+const TRACK_W = 860;
+const BOX_W = 52;
+const BOX_H = 24;
+const LAYOUT_KEY = "radio-ctrl-layout";
+
+type LayoutMode = "even" | "scaled" | "fill";
+
 function getValue(row: CourseRow, key: string): number | string {
   switch (key) {
     case "class":
@@ -57,13 +65,21 @@ export default function ExportTable({
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [classWidth, setClassWidth] = useState(150);
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>("even");
   const classWidthRef = useRef(classWidth);
   classWidthRef.current = classWidth;
 
   useEffect(() => {
     const w = Number(window.localStorage.getItem(CLASS_KEY));
     if (Number.isFinite(w) && w >= CLASS_MIN) setClassWidth(w);
+    const m = window.localStorage.getItem(LAYOUT_KEY);
+    if (m === "even" || m === "scaled" || m === "fill") setLayoutMode(m);
   }, []);
+
+  function chooseLayout(m: LayoutMode) {
+    setLayoutMode(m);
+    window.localStorage.setItem(LAYOUT_KEY, m);
+  }
 
   const startClassResize = useCallback((e: React.MouseEvent) => {
     const startX = e.clientX;
@@ -96,6 +112,16 @@ export default function ExportTable({
     return indexed.map((p) => p[0]);
   }, [rows, sort]);
 
+  // longest course (by summed legs) for the "scaled" layout denominator
+  const maxTotal = useMemo(
+    () =>
+      rows.reduce(
+        (m, r) => Math.max(m, r.legs.reduce((s, l) => s + l.dist, 0)),
+        0,
+      ) || 1,
+    [rows],
+  );
+
   function toggleSort(key: string) {
     setSort((s) =>
       s && s.key === key
@@ -123,6 +149,7 @@ export default function ExportTable({
 
   const SortLabel = ({ k, label }: { k: string; label: string }) => (
     <button
+      type="button"
       onClick={() => toggleSort(k)}
       className="inline-flex items-center gap-0.5 hover:text-gray-900"
       title="Click to sort"
@@ -135,6 +162,66 @@ export default function ExportTable({
       </span>
     </button>
   );
+
+  // the inner control glyph (button for controls, plain chip for start/finish)
+  function cellInner(code: string, kind: "start" | "control" | "finish") {
+    if (kind !== "control") {
+      return (
+        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600">
+          {code}
+        </span>
+      );
+    }
+    const selected = code in selection;
+    const count = usage.get(code) ?? 0;
+    const rank = heatRank.get(code) ?? 0;
+    const style = selected
+      ? { backgroundColor: radioColor(code), color: "#fff" }
+      : heatmap
+        ? {
+            backgroundColor: heatColor(rank, maxRank),
+            color: heatText(rank, maxRank),
+          }
+        : undefined;
+    return (
+      <button
+        type="button"
+        onClick={() => onToggle(code)}
+        style={style}
+        title={`Control ${code} — used ${count}×`}
+        className={`w-full rounded px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums transition ${
+          selected
+            ? "shadow-sm ring-1 ring-black/10"
+            : "hover:ring-1 hover:ring-gray-300"
+        } ${!selected && !heatmap ? "bg-gray-50 text-gray-800" : ""}`}
+      >
+        {code}
+      </button>
+    );
+  }
+
+  // positioned cells (start + legs) for a row in stretched layouts
+  function stretchedCells(row: CourseRow) {
+    const denom =
+      layoutMode === "fill"
+        ? row.legs.reduce((s, l) => s + l.dist, 0) || 1
+        : maxTotal;
+    const cells: {
+      code: string;
+      kind: "start" | "control" | "finish";
+      frac: number;
+    }[] = [{ code: row.start, kind: "start", frac: 0 }];
+    let cum = 0;
+    for (const leg of row.legs) {
+      cum += leg.dist;
+      cells.push({
+        code: leg.code,
+        kind: leg.code === FINISH ? "finish" : "control",
+        frac: Math.min(1, cum / denom),
+      });
+    }
+    return cells;
+  }
 
   return (
     <div className="h-full overflow-auto rounded border border-gray-200">
@@ -157,8 +244,40 @@ export default function ExportTable({
               className="w-1.5 cursor-col-resize self-stretch rounded bg-gray-200 hover:bg-blue-400"
             />
           </div>
-          <div className="flex items-center px-3 py-1.5 text-gray-400">
+          <div className="flex items-center gap-3 px-3 py-1.5">
             <SortLabel k="controls" label="controls →" />
+            <div
+              className="flex overflow-hidden rounded border border-gray-300 text-[10px] font-medium"
+              title="Spacing of controls along each course"
+            >
+              {(
+                [
+                  ["even", "Even"],
+                  ["scaled", "Scaled"],
+                  ["fill", "Fill"],
+                ] as [LayoutMode, string][]
+              ).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => chooseLayout(m)}
+                  className={`px-2 py-0.5 ${
+                    layoutMode === m
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {layoutMode !== "even" && (
+              <span className="text-[10px] font-normal text-gray-400">
+                {layoutMode === "fill"
+                  ? "each course fills the width (by leg distance) · close controls may overlap"
+                  : "scaled to the longest course · close controls may overlap"}
+              </span>
+            )}
           </div>
         </div>
 
@@ -198,59 +317,60 @@ export default function ExportTable({
                 <span
                   className={`${LEN_W} text-right text-xs tabular-nums text-gray-500`}
                 >
-                  {row.length.toFixed(2)}
+                  {row.length}
                 </span>
                 <span className="w-1.5 shrink-0" />
               </div>
-              <div className="flex items-stretch gap-0.5 py-1 pl-2">
-                <div
-                  className={`flex ${CTRL_W} shrink-0 flex-col items-center justify-start`}
-                >
-                  <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600">
-                    {row.start}
-                  </span>
-                </div>
-                {row.legs.map((leg, j) => {
-                  const isFinish = leg.code === FINISH;
-                  const selected = !isFinish && leg.code in selection;
-                  const count = usage.get(leg.code) ?? 0;
-                  const rank = heatRank.get(leg.code) ?? 0;
-                  const heat = heatmap && !isFinish;
-                  const style = selected
-                    ? { backgroundColor: radioColor(leg.code), color: "#fff" }
-                    : heat
-                      ? {
-                          backgroundColor: heatColor(rank, maxRank),
-                          color: heatText(rank, maxRank),
-                        }
-                      : undefined;
-                  return (
+
+              {layoutMode === "even" ? (
+                <div className="flex items-stretch gap-0.5 py-1 pl-2">
+                  <div
+                    className={`flex ${CTRL_W} shrink-0 flex-col items-center justify-start`}
+                  >
+                    {cellInner(row.start, "start")}
+                  </div>
+                  {row.legs.map((leg, j) => (
                     <div
                       key={j}
                       className={`flex ${CTRL_W} shrink-0 flex-col items-center justify-start gap-0.5`}
                     >
-                      {isFinish ? (
-                        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600">
-                          {leg.code}
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => onToggle(leg.code)}
-                          style={style}
-                          title={`Control ${leg.code} — used ${count}×`}
-                          className={`w-full rounded px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums transition ${
-                            selected
-                              ? "shadow-sm ring-1 ring-black/10"
-                              : "hover:ring-1 hover:ring-gray-300"
-                          } ${!selected && !heat ? "bg-gray-50 text-gray-800" : ""}`}
-                        >
-                          {leg.code}
-                        </button>
+                      {cellInner(
+                        leg.code,
+                        leg.code === FINISH ? "finish" : "control",
                       )}
                     </div>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-1 pl-2">
+                  <div
+                    className="relative"
+                    style={{ width: TRACK_W + BOX_W, height: BOX_H }}
+                  >
+                    {layoutMode === "fill" &&
+                      [0.25, 0.5, 0.75].map((p) => (
+                        <div
+                          key={p}
+                          className="absolute top-0 bottom-0 border-l border-dashed border-gray-200"
+                          style={{ left: BOX_W / 2 + p * TRACK_W }}
+                        >
+                          <span className="absolute top-0 left-0.5 text-[8px] text-gray-300">
+                            {p * 100}%
+                          </span>
+                        </div>
+                      ))}
+                    {stretchedCells(row).map((c, idx) => (
+                      <div
+                        key={idx}
+                        className="absolute top-0 flex justify-center"
+                        style={{ left: c.frac * TRACK_W, width: BOX_W }}
+                      >
+                        {cellInner(c.code, c.kind)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
