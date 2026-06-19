@@ -40,7 +40,6 @@ export default function OverviewTable({ rows, controls }: Props) {
   const getValue = useCallback(
     (r: OverviewRow, key: string): number | string | null => {
       if (key === "class") return r.className;
-      if (key === "course") return r.course;
       if (key === "length") return r.length;
       if (key.startsWith("c:")) {
         const cell = r.cells[key.slice(2)];
@@ -81,7 +80,6 @@ export default function OverviewTable({ rows, controls }: Props) {
         <thead className="sticky top-0 z-10 bg-gray-50 text-gray-600">
           <tr className="border-b border-gray-200">
             <SortTh label="Class" sortKey="class" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5 text-left" />
-            <SortTh label="Course" sortKey="course" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5 text-left" />
             <SortTh label="km" sortKey="length" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5 text-right" />
             {ordered.map((c, idx) => (
               <th
@@ -123,7 +121,6 @@ export default function OverviewTable({ rows, controls }: Props) {
           <tr className="border-b border-gray-200 text-[10px] text-gray-400">
             <th></th>
             <th></th>
-            <th></th>
             {ordered.map((c) => (
               <th key={c} colSpan={2} className="border-l border-gray-200 px-2 pb-1">
                 <span className="mr-3">km</span>
@@ -136,7 +133,6 @@ export default function OverviewTable({ rows, controls }: Props) {
           {sorted.map((r, i) => (
             <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
               <td className="px-2 py-1 font-medium">{r.className}</td>
-              <td className="px-2 py-1 text-gray-500">{r.course}</td>
               <td className="px-2 py-1 text-right tabular-nums text-gray-500">
                 {r.length.toFixed(2)}
               </td>
