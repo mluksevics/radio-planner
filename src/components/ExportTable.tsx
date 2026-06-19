@@ -24,9 +24,6 @@ const CLASS_KEY = "radio-class-width";
 
 // stretched-layout geometry (px)
 const BOX_H = 24;
-// fixed control-track width — the SAME for every course so widths line up and
-// the 25/50/75% marks align. Controls sit at their cumulative-distance fraction.
-const TRACK_W = 760;
 const LAYOUT_KEY = "radio-ctrl-layout";
 
 type LayoutMode = "even" | "scaled" | "fill";
@@ -120,15 +117,13 @@ export default function ExportTable({
     return indexed.map((p) => p[0]);
   }, [rows, sort]);
 
-  // longest course (summed legs) → denominator for the "scaled" layout
-  const maxTotal = useMemo(
-    () =>
-      rows.reduce(
-        (m, r) => Math.max(m, r.legs.reduce((s, l) => s + l.dist, 0)),
-        0,
-      ) || 1,
-    [rows],
-  );
+  // shortest leg across all courses → shared px/km scale for the "scaled" layout
+  const globalMinLeg = useMemo(() => {
+    let m = Infinity;
+    for (const r of rows)
+      for (const l of r.legs) if (l.dist > 0 && l.dist < m) m = l.dist;
+    return Number.isFinite(m) ? m : 1;
+  }, [rows]);
 
   // box width = just enough to show the widest control code (e.g. "180")
   const boxW = useMemo(() => {
@@ -139,7 +134,25 @@ export default function ExportTable({
     }
     return Math.round(len * 7 + 12);
   }, [rows]);
-  const usable = TRACK_W - boxW;
+  // the shortest leg maps to one box width (+2px) so adjacent controls never
+  // overlap; every longer leg scales up from there → the row is exactly as wide
+  // as it needs to be for all numbers to be readable.
+  const step = boxW + 2;
+
+  // FILL uses one shared width for every course (so the 25/50/75% marks line up)
+  // wide enough that even the densest course (max total/shortest-leg ratio) has
+  // no overlap. Width in fraction units = this ratio × step.
+  const fillRatio = useMemo(() => {
+    let mx = 1;
+    for (const r of rows) {
+      const total = r.legs.reduce((s, l) => s + l.dist, 0) || 1;
+      let rmin = Infinity;
+      for (const l of r.legs) if (l.dist > 0 && l.dist < rmin) rmin = l.dist;
+      const ratio = total / (Number.isFinite(rmin) ? rmin : total);
+      if (ratio > mx) mx = ratio;
+    }
+    return mx;
+  }, [rows]);
 
   function toggleSort(key: string) {
     setSort((s) =>
@@ -236,17 +249,26 @@ export default function ExportTable({
     return { cells, total };
   }
 
-  // x of each cell in a stretched layout. The track is a fixed TRACK_W for every
-  // row (so widths line up), controls sit at their cumulative-distance fraction.
-  // "fill": fraction of THIS course (every course fills the track, 50% aligns).
-  // "scaled": fraction of the LONGEST course (shorter courses end partway).
+  // x of each cell in a stretched layout. Both modes guarantee no overlap
+  // (shortest leg ≥ one box width).
+  // "fill": every course shares ONE width (so the 25/50/75% marks line up),
+  //   wide enough for the densest course; controls sit at fraction of THIS
+  //   course → a control at 50% of any course is on the same vertical line.
+  // "scaled": one shared px/km (global shortest leg) so leg distances are
+  //   directly comparable across courses (rows differ in width).
   function placedCells(row: CourseRow) {
     const { cells, total } = rowCells(row);
-    const denom = layoutMode === "fill" ? total : maxTotal;
-    const placed = cells.map((c) => ({ ...c, x: (c.cum / denom) * usable }));
-    // box centre for a given fraction p into THIS course (fill gridlines)
-    const gridCenter = (p: number): number => (p * total) / denom * usable + boxW / 2;
-    return { placed, contentW: TRACK_W, gridCenter };
+    if (layoutMode === "fill") {
+      const usable = step * fillRatio; // shared across all courses
+      const placed = cells.map((c) => ({ ...c, x: (c.cum / total) * usable }));
+      const gridCenter = (p: number): number => p * usable + boxW / 2;
+      return { placed, contentW: usable + boxW, gridCenter };
+    }
+    const scale = step / globalMinLeg; // px per km, shared across courses
+    const placed = cells.map((c) => ({ ...c, x: c.cum * scale }));
+    const contentW = (placed.length ? placed[placed.length - 1].x : 0) + boxW;
+    const gridCenter = (p: number): number => p * total * scale + boxW / 2;
+    return { placed, contentW, gridCenter };
   }
 
   return (
@@ -301,7 +323,7 @@ export default function ExportTable({
               <span className="text-[10px] font-normal text-gray-400">
                 {layoutMode === "fill"
                   ? "every course fills the width · 25/50/75% marks align"
-                  : "spaced by distance, scaled to the longest course"}
+                  : "spaced by distance, one scale for all courses"}
               </span>
             )}
           </div>
