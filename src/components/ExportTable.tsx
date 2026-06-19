@@ -24,8 +24,10 @@ const CLASS_KEY = "radio-class-width";
 
 // stretched-layout geometry (px)
 const TRACK_W = 860;
-const BOX_W = 52;
+const BOX_W = 50;
 const BOX_H = 24;
+// minimum left-to-left step so boxes never overlap and numbers stay readable
+const MIN_STEP = BOX_W + 4;
 const LAYOUT_KEY = "radio-ctrl-layout";
 
 type LayoutMode = "even" | "scaled" | "fill";
@@ -164,7 +166,11 @@ export default function ExportTable({
   );
 
   // the inner control glyph (button for controls, plain chip for start/finish)
-  function cellInner(code: string, kind: "start" | "control" | "finish") {
+  function cellInner(
+    code: string,
+    kind: "start" | "control" | "finish",
+    pct: number,
+  ) {
     if (kind !== "control") {
       return (
         <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600">
@@ -188,7 +194,7 @@ export default function ExportTable({
         type="button"
         onClick={() => onToggle(code)}
         style={style}
-        title={`Control ${code} — used ${count}×`}
+        title={`Control ${code} — used ${count}× · ${Math.round(pct)}% into course`}
         className={`w-full rounded px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums transition ${
           selected
             ? "shadow-sm ring-1 ring-black/10"
@@ -200,27 +206,41 @@ export default function ExportTable({
     );
   }
 
-  // positioned cells (start + legs) for a row in stretched layouts
-  function stretchedCells(row: CourseRow) {
-    const denom =
-      layoutMode === "fill"
-        ? row.legs.reduce((s, l) => s + l.dist, 0) || 1
-        : maxTotal;
+  // start + legs of a row with cumulative distance and % into the course
+  function rowCells(row: CourseRow) {
+    const total = row.legs.reduce((s, l) => s + l.dist, 0) || 1;
     const cells: {
       code: string;
       kind: "start" | "control" | "finish";
-      frac: number;
-    }[] = [{ code: row.start, kind: "start", frac: 0 }];
+      cum: number;
+      pct: number;
+    }[] = [{ code: row.start, kind: "start", cum: 0, pct: 0 }];
     let cum = 0;
     for (const leg of row.legs) {
       cum += leg.dist;
       cells.push({
         code: leg.code,
         kind: leg.code === FINISH ? "finish" : "control",
-        frac: Math.min(1, cum / denom),
+        cum,
+        pct: (cum / total) * 100,
       });
     }
-    return cells;
+    return { cells, total };
+  }
+
+  // x-position (px) of each cell in a stretched layout, pushed right so boxes
+  // keep at least MIN_STEP apart (never overlap → readable, scrolls wider).
+  function placedCells(row: CourseRow) {
+    const { cells, total } = rowCells(row);
+    const denom = layoutMode === "fill" ? total : maxTotal;
+    let prev = -Infinity;
+    const placed = cells.map((c) => {
+      let x = (c.cum / denom) * TRACK_W;
+      if (x < prev + MIN_STEP) x = prev + MIN_STEP;
+      prev = x;
+      return { ...c, x };
+    });
+    return { placed, contentW: prev + BOX_W };
   }
 
   return (
@@ -324,52 +344,52 @@ export default function ExportTable({
 
               {layoutMode === "even" ? (
                 <div className="flex items-stretch gap-0.5 py-1 pl-2">
-                  <div
-                    className={`flex ${CTRL_W} shrink-0 flex-col items-center justify-start`}
-                  >
-                    {cellInner(row.start, "start")}
-                  </div>
-                  {row.legs.map((leg, j) => (
+                  {rowCells(row).cells.map((c, j) => (
                     <div
                       key={j}
                       className={`flex ${CTRL_W} shrink-0 flex-col items-center justify-start gap-0.5`}
                     >
-                      {cellInner(
-                        leg.code,
-                        leg.code === FINISH ? "finish" : "control",
-                      )}
+                      {cellInner(c.code, c.kind, c.pct)}
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="py-1 pl-2">
-                  <div
-                    className="relative"
-                    style={{ width: TRACK_W + BOX_W, height: BOX_H }}
-                  >
-                    {layoutMode === "fill" &&
-                      [0.25, 0.5, 0.75].map((p) => (
-                        <div
-                          key={p}
-                          className="absolute top-0 bottom-0 border-l border-dashed border-gray-200"
-                          style={{ left: BOX_W / 2 + p * TRACK_W }}
-                        >
-                          <span className="absolute top-0 left-0.5 text-[8px] text-gray-300">
-                            {p * 100}%
-                          </span>
-                        </div>
-                      ))}
-                    {stretchedCells(row).map((c, idx) => (
+                (() => {
+                  const { placed, contentW } = placedCells(row);
+                  return (
+                    <div className="py-1 pl-2">
                       <div
-                        key={idx}
-                        className="absolute top-0 flex justify-center"
-                        style={{ left: c.frac * TRACK_W, width: BOX_W }}
+                        className="relative"
+                        style={{
+                          width: Math.max(contentW, TRACK_W + BOX_W),
+                          height: BOX_H,
+                        }}
                       >
-                        {cellInner(c.code, c.kind)}
+                        {layoutMode === "fill" &&
+                          [0.25, 0.5, 0.75].map((p) => (
+                            <div
+                              key={p}
+                              className="absolute top-0 bottom-0 border-l border-dashed border-gray-200"
+                              style={{ left: BOX_W / 2 + p * TRACK_W }}
+                            >
+                              <span className="absolute top-0 left-0.5 text-[8px] text-gray-300">
+                                {p * 100}%
+                              </span>
+                            </div>
+                          ))}
+                        {placed.map((c, idx) => (
+                          <div
+                            key={idx}
+                            className="absolute top-0 flex justify-center"
+                            style={{ left: c.x, width: BOX_W }}
+                          >
+                            {cellInner(c.code, c.kind, c.pct)}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    </div>
+                  );
+                })()
               )}
             </div>
           );
