@@ -49,15 +49,26 @@ export async function exportXlsx(state: AppState): Promise<void> {
   // --- Overview matrix sheet ---
   const overview = buildOverview(state.rows, selectedControls);
   const overviewAoa: (string | number)[][] = [];
-  const headerTop: (string | number)[] = ["Class", "Course", "Length"];
+  const headerTop: (string | number)[] = [
+    "Class",
+    "Course",
+    "Length",
+    "Controls",
+  ];
   for (const c of selectedControls) {
-    headerTop.push(`${c} (km)`, `${c} (ratio)`);
+    headerTop.push(`${c} (#)`, `${c} (km)`, `${c} (ratio)`);
   }
   overviewAoa.push(headerTop);
   for (const r of overview) {
-    const line: (string | number)[] = [r.className, r.course, r.length];
+    const line: (string | number)[] = [
+      r.className,
+      r.course,
+      r.length,
+      r.nControls,
+    ];
     for (const c of selectedControls) {
       const cell = r.cells[c];
+      line.push(cell ? cell.idx : "");
       line.push(cell ? round(cell.dist) : "");
       line.push(cell ? round(cell.ratio, 3) : "");
     }

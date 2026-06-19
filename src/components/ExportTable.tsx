@@ -157,7 +157,7 @@ export default function ExportTable({
       if (r.start.length > len) len = r.start.length;
       for (const l of r.legs) if (l.code.length > len) len = l.code.length;
     }
-    return Math.round(len * 6.5 + 6);
+    return Math.round(len * 7 + 10);
   }, [rows]);
 
   // slider ↔ zoom: log scale, slider centre (pos 50) = zoom 1 = fills the

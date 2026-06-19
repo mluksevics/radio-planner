@@ -82,12 +82,16 @@ export function expandClasses(rows: CourseRow[]): ClassEntry[] {
 export interface OverviewCell {
   dist: number;
   ratio: number;
+  /** 1-based position of the control among the course's controls */
+  idx: number;
 }
 
 export interface OverviewRow {
   className: string;
   course: string;
   length: number;
+  /** number of controls in the course (excludes start/finish) */
+  nControls: number;
   /** keyed by control code; missing => course does not pass that control */
   cells: Record<string, OverviewCell>;
 }
@@ -98,6 +102,14 @@ export function buildOverview(
   controls: string[],
 ): OverviewRow[] {
   return expandClasses(rows).map((entry) => {
+    // 1-based control index of the first occurrence of each control
+    const firstIdx = new Map<string, number>();
+    let n = 0;
+    for (const leg of entry.row.legs) {
+      if (leg.code === FINISH) continue;
+      n += 1;
+      if (!firstIdx.has(leg.code)) firstIdx.set(leg.code, n);
+    }
     const cells: Record<string, OverviewCell> = {};
     for (const control of controls) {
       const dist = cumulativeDistance(entry.row, control);
@@ -105,6 +117,7 @@ export function buildOverview(
         cells[control] = {
           dist,
           ratio: entry.length > 0 ? dist / entry.length : 0,
+          idx: firstIdx.get(control) ?? 0,
         };
       }
     }
@@ -112,6 +125,7 @@ export function buildOverview(
       className: entry.className,
       course: entry.course,
       length: entry.length,
+      nControls: n,
       cells,
     };
   });

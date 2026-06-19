@@ -41,6 +41,7 @@ export default function OverviewTable({ rows, controls }: Props) {
     (r: OverviewRow, key: string): number | string | null => {
       if (key === "class") return r.className;
       if (key === "length") return r.length;
+      if (key === "controls") return r.nControls;
       if (key.startsWith("c:")) {
         const cell = r.cells[key.slice(2)];
         return cell ? cell.ratio : null;
@@ -81,10 +82,11 @@ export default function OverviewTable({ rows, controls }: Props) {
           <tr className="border-b border-gray-200">
             <SortTh label="Class" sortKey="class" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5 text-left" />
             <SortTh label="km" sortKey="length" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5 text-right" />
+            <SortTh label="ctrls" sortKey="controls" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5 text-right" />
             {ordered.map((c, idx) => (
               <th
                 key={c}
-                colSpan={2}
+                colSpan={3}
                 draggable
                 onDragStart={() => setDragCol(idx)}
                 onDragOver={(e) => {
@@ -121,8 +123,10 @@ export default function OverviewTable({ rows, controls }: Props) {
           <tr className="border-b border-gray-200 text-[10px] text-gray-400">
             <th></th>
             <th></th>
+            <th></th>
             {ordered.map((c) => (
-              <th key={c} colSpan={2} className="border-l border-gray-200 px-2 pb-1">
+              <th key={c} colSpan={3} className="border-l border-gray-200 px-2 pb-1">
+                <span className="mr-3" title="control number in the course">#</span>
                 <span className="mr-3">km</span>
                 <span>ratio</span>
               </th>
@@ -136,18 +140,22 @@ export default function OverviewTable({ rows, controls }: Props) {
               <td className="px-2 py-1 text-right tabular-nums text-gray-500">
                 {r.length.toFixed(2)}
               </td>
+              <td className="px-2 py-1 text-right tabular-nums text-gray-500">
+                {r.nControls}
+              </td>
               {ordered.map((c) => {
                 const cell = r.cells[c];
                 return (
                   <td
                     key={c}
-                    colSpan={2}
+                    colSpan={3}
                     className={`border-l border-gray-200 px-2 py-1 text-center tabular-nums ${
                       cell ? "" : "bg-gray-50 text-gray-300"
                     }`}
                   >
                     {cell ? (
                       <>
+                        <span className="mr-3 text-gray-400">{cell.idx}</span>
                         <span className="mr-3 font-medium">
                           {cell.dist.toFixed(2)}
                         </span>
