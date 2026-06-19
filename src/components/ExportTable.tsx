@@ -23,11 +23,10 @@ const CLASS_MIN = 50;
 const CLASS_KEY = "radio-class-width";
 
 // stretched-layout geometry (px)
-const BOX_W = 50;
 const BOX_H = 24;
-// the shortest leg maps to this many px (so its two boxes just touch and stay
-// readable); every longer leg scales up proportionally from there.
-const MIN_GAP = BOX_W;
+// fixed control-track width — the SAME for every course so widths line up and
+// the 25/50/75% marks align. Controls sit at their cumulative-distance fraction.
+const TRACK_W = 760;
 const LAYOUT_KEY = "radio-ctrl-layout";
 
 type LayoutMode = "even" | "scaled" | "fill";
@@ -121,13 +120,26 @@ export default function ExportTable({
     return indexed.map((p) => p[0]);
   }, [rows, sort]);
 
-  // shortest leg across all courses → the px/km scale for the "scaled" layout
-  const globalMinLeg = useMemo(() => {
-    let m = Infinity;
-    for (const r of rows)
-      for (const l of r.legs) if (l.dist > 0 && l.dist < m) m = l.dist;
-    return Number.isFinite(m) ? m : 1;
+  // longest course (summed legs) → denominator for the "scaled" layout
+  const maxTotal = useMemo(
+    () =>
+      rows.reduce(
+        (m, r) => Math.max(m, r.legs.reduce((s, l) => s + l.dist, 0)),
+        0,
+      ) || 1,
+    [rows],
+  );
+
+  // box width = just enough to show the widest control code (e.g. "180")
+  const boxW = useMemo(() => {
+    let len = 2;
+    for (const r of rows) {
+      if (r.start.length > len) len = r.start.length;
+      for (const l of r.legs) if (l.code.length > len) len = l.code.length;
+    }
+    return Math.round(len * 7 + 12);
   }, [rows]);
+  const usable = TRACK_W - boxW;
 
   function toggleSort(key: string) {
     setSort((s) =>
@@ -224,38 +236,17 @@ export default function ExportTable({
     return { cells, total };
   }
 
-  // x of each cell in a stretched layout: true distance-proportional, scaled so
-  // the shortest leg = MIN_GAP px (everything longer scales up → wider, scrolls).
-  // "fill" scales per course (its own shortest leg); "scaled" uses one px/km
-  // across all courses so distances are comparable row-to-row.
+  // x of each cell in a stretched layout. The track is a fixed TRACK_W for every
+  // row (so widths line up), controls sit at their cumulative-distance fraction.
+  // "fill": fraction of THIS course (every course fills the track, 50% aligns).
+  // "scaled": fraction of the LONGEST course (shorter courses end partway).
   function placedCells(row: CourseRow) {
     const { cells, total } = rowCells(row);
-    let rowMin = Infinity;
-    for (const l of row.legs) if (l.dist > 0 && l.dist < rowMin) rowMin = l.dist;
-    const minLeg =
-      layoutMode === "fill"
-        ? Number.isFinite(rowMin)
-          ? rowMin
-          : 1
-        : globalMinLeg;
-    const scale = MIN_GAP / minLeg; // px per km
-    const placed = cells.map((c) => ({ ...c, x: c.cum * scale }));
-    const prev = placed.length ? placed[placed.length - 1].x : 0;
-    const contentW = prev + BOX_W;
-    // interpolate the x (box centre) for a given % into the course (fill mode)
-    const gridCenter = (p: number): number => {
-      const target = p * total;
-      for (let i = 1; i < placed.length; i++) {
-        if (placed[i].cum >= target) {
-          const a = placed[i - 1];
-          const b = placed[i];
-          const t = b.cum > a.cum ? (target - a.cum) / (b.cum - a.cum) : 0;
-          return a.x + t * (b.x - a.x) + BOX_W / 2;
-        }
-      }
-      return prev + BOX_W / 2;
-    };
-    return { placed, contentW, gridCenter };
+    const denom = layoutMode === "fill" ? total : maxTotal;
+    const placed = cells.map((c) => ({ ...c, x: (c.cum / denom) * usable }));
+    // box centre for a given fraction p into THIS course (fill gridlines)
+    const gridCenter = (p: number): number => (p * total) / denom * usable + boxW / 2;
+    return { placed, contentW: TRACK_W, gridCenter };
   }
 
   return (
@@ -309,8 +300,8 @@ export default function ExportTable({
             {layoutMode !== "even" && (
               <span className="text-[10px] font-normal text-gray-400">
                 {layoutMode === "fill"
-                  ? "each course fills the width by leg distance (min 50px/control)"
-                  : "scaled to the longest course (min 50px/control)"}
+                  ? "every course fills the width · 25/50/75% marks align"
+                  : "spaced by distance, scaled to the longest course"}
               </span>
             )}
           </div>
@@ -374,6 +365,7 @@ export default function ExportTable({
                   return (
                     <div className="py-1 pl-2">
                       <div
+                        data-testid="ctrl-track"
                         className="relative"
                         style={{ width: contentW, height: BOX_H }}
                       >
@@ -393,7 +385,7 @@ export default function ExportTable({
                           <div
                             key={idx}
                             className="absolute top-0 flex justify-center"
-                            style={{ left: c.x, width: BOX_W }}
+                            style={{ left: c.x, width: boxW }}
                           >
                             {cellInner(c.code, c.kind, c.pct)}
                           </div>
