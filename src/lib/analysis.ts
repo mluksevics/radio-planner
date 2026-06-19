@@ -131,7 +131,12 @@ function sqlEscape(s: string): string {
   return s.replace(/'/g, "''");
 }
 
-/** Generate liveresultat splitcontrols INSERT statements for each class x selected control it passes. */
+/**
+ * Generate liveresultat splitcontrols INSERT statements: one row per passing of
+ * a selected control within each class, walking the course in order.
+ *  - code   = 1000 * passingNumber + controlNumber (1st pass of 53 → 1053, 2nd → 2053)
+ *  - corder = order of the split within the class (1, 2, 3 … in course order)
+ */
 export function buildSql(
   rows: CourseRow[],
   selection: RadioControl[],
@@ -139,25 +144,36 @@ export function buildSql(
 ): SqlRow[] {
   const out: SqlRow[] = [];
   const eventVal = eventId.trim() === "" ? "NULL" : eventId.trim();
+  const byControl = new Map(selection.map((rc) => [rc.control, rc]));
   for (const entry of expandClasses(rows)) {
-    for (const rc of selection) {
-      const dist = cumulativeDistance(entry.row, rc.control);
-      if (dist == null) continue;
-      const km = dist.toFixed(1);
+    const passCount = new Map<string, number>();
+    let corder = 0;
+    let cum = 0;
+    for (const leg of entry.row.legs) {
+      cum += leg.dist;
+      const rc = byControl.get(leg.code);
+      if (!rc) continue;
+      const pass = (passCount.get(leg.code) ?? 0) + 1;
+      passCount.set(leg.code, pass);
+      corder += 1;
+      const controlNum = Number(leg.code);
+      const codeVal = Number.isFinite(controlNum)
+        ? String(1000 * pass + controlNum)
+        : leg.code;
+      const km = cum.toFixed(1);
       const fullName = rc.name.trim()
         ? `${rc.name.trim()} (${km}km)`
         : `${rc.control} (${km}km)`;
-      const codeVal = rc.code.trim() === "" ? rc.control : rc.code.trim();
       const statement =
         "INSERT INTO `liveresultat`.`splitcontrols` " +
         "(`tavid`, `classname`, `code`, `corder`, `name`) VALUES (" +
-        `${eventVal}, '${sqlEscape(entry.className)}', ${codeVal}, ${rc.corder}, '${sqlEscape(fullName)}');`;
+        `${eventVal}, '${sqlEscape(entry.className)}', ${codeVal}, ${corder}, '${sqlEscape(fullName)}');`;
       out.push({
         className: entry.className,
         control: rc.control,
         code: codeVal,
-        corder: rc.corder,
-        dist,
+        corder,
+        dist: cum,
         name: fullName,
         statement,
       });

@@ -3,25 +3,19 @@
 import { useRef } from "react";
 
 interface Props {
-  heatmap: boolean;
-  onToggleHeatmap: () => void;
   onSaveJson: () => void;
   onLoadJson: (file: File) => void;
   onExportExcel: () => void;
   onCopyLink: () => void;
-  onPrint: () => void;
   linkCopied: boolean;
   linkSaving: boolean;
 }
 
 export default function Toolbar({
-  heatmap,
-  onToggleHeatmap,
   onSaveJson,
   onLoadJson,
   onExportExcel,
   onCopyLink,
-  onPrint,
   linkCopied,
   linkSaving,
 }: Props) {
@@ -29,16 +23,6 @@ export default function Toolbar({
 
   return (
     <div className="flex flex-wrap items-center gap-2 print:hidden">
-      <label className="flex cursor-pointer items-center gap-1.5 rounded border border-gray-300 px-3 py-1.5 text-sm">
-        <input
-          type="checkbox"
-          checked={heatmap}
-          onChange={onToggleHeatmap}
-          className="accent-orange-500"
-        />
-        Heatmap
-      </label>
-      <span className="mx-1 h-5 w-px bg-gray-300" />
       <button
         onClick={onCopyLink}
         disabled={linkSaving}
@@ -72,12 +56,6 @@ export default function Toolbar({
         className="rounded bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800"
       >
         Export Excel
-      </button>
-      <button
-        onClick={onPrint}
-        className="rounded border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50"
-      >
-        Print
       </button>
     </div>
   );

@@ -312,13 +312,6 @@ export default function Home() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleClearAll}
-            className="rounded border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
-          >
-            Clear all
-          </button>
           <div className="relative">
             <button
               onClick={() => setShowData((v) => !v)}
@@ -351,16 +344,20 @@ export default function Home() {
             )}
           </div>
           <Toolbar
-            heatmap={state.heatmap}
-            onToggleHeatmap={() => dispatch({ type: "TOGGLE_HEATMAP" })}
             onSaveJson={() => exportJson(state)}
             onLoadJson={handleLoadJson}
             onExportExcel={() => exportXlsx(state)}
             onCopyLink={handleCopyLink}
             linkCopied={linkCopied}
             linkSaving={linkSaving}
-            onPrint={() => window.print()}
           />
+          <button
+            type="button"
+            onClick={handleClearAll}
+            className="rounded border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
+          >
+            Clear all
+          </button>
         </div>
       </header>
 
@@ -409,6 +406,7 @@ export default function Home() {
                 heatRank={heatRank}
                 maxRank={maxRank}
                 heatmap={state.heatmap}
+                onToggleHeatmap={() => dispatch({ type: "TOGGLE_HEATMAP" })}
                 hZoom={state.hZoom}
                 onHZoom={(hZoom) => dispatch({ type: "SET_HZOOM", hZoom })}
                 onToggle={(control) =>

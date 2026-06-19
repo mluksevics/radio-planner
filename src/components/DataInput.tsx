@@ -117,6 +117,10 @@ export default function DataInput({
         {ocadError && <p className="mt-1 text-sm text-red-600">{ocadError}</p>}
       </div>
 
+      <p className="text-xs font-semibold text-gray-600">
+        OCAD &ldquo;Courses (version 8)&rdquo; text export — control sequences
+        and leg lengths only (no coordinates)
+      </p>
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -126,7 +130,7 @@ export default function DataInput({
           Load sample
         </button>
         <label className="cursor-pointer rounded border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50">
-          Upload .txt
+          Upload OCAD v8 .txt
           <input
             ref={fileRef}
             type="file"

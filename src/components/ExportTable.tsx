@@ -13,6 +13,7 @@ interface Props {
   heatRank: Map<string, number>;
   maxRank: number;
   heatmap: boolean;
+  onToggleHeatmap: () => void;
   hZoom: number;
   onHZoom: (hZoom: number) => void;
   onToggle: (control: string) => void;
@@ -63,6 +64,7 @@ export default function ExportTable({
   heatRank,
   maxRank,
   heatmap,
+  onToggleHeatmap,
   hZoom,
   onHZoom,
   onToggle,
@@ -324,6 +326,15 @@ export default function ExportTable({
           </div>
           <div className="flex items-center gap-3 px-3 py-1.5">
             <SortLabel k="controls" label="controls →" />
+            <label className="flex cursor-pointer items-center gap-1 text-[11px] font-normal text-gray-600">
+              <input
+                type="checkbox"
+                checked={heatmap}
+                onChange={onToggleHeatmap}
+                className="accent-orange-500"
+              />
+              Heatmap
+            </label>
             <div
               className="flex overflow-hidden rounded border border-gray-300 text-[10px] font-medium"
               title="Spacing of controls along each course"

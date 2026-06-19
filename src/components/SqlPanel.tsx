@@ -18,12 +18,8 @@ function getValue(rc: RadioControl, key: string): number | string {
   switch (key) {
     case "control":
       return Number(rc.control);
-    case "code":
-      return rc.code || rc.control;
     case "name":
       return rc.name;
-    case "corder":
-      return rc.corder;
     default:
       return "";
   }
@@ -84,9 +80,7 @@ export default function SqlPanel({
           <thead className="bg-gray-50 text-left text-xs text-gray-600">
             <tr className="border-b border-gray-200">
               <SortTh label="Control" sortKey="control" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5" />
-              <SortTh label="liveresultat code" sortKey="code" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5" />
               <SortTh label="Name" sortKey="name" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5" />
-              <SortTh label="corder" sortKey="corder" activeKey={sortKey} dir={sortDir} onToggle={toggle} className="px-2 py-1.5" />
             </tr>
           </thead>
           <tbody>
@@ -97,28 +91,10 @@ export default function SqlPanel({
                 </td>
                 <td className="px-2 py-1">
                   <input
-                    value={rc.code}
-                    onChange={(e) => onUpdate(rc.control, { code: e.target.value })}
-                    placeholder={rc.control}
-                    className="w-28 rounded border border-gray-300 px-2 py-0.5 text-sm tabular-nums"
-                  />
-                </td>
-                <td className="px-2 py-1">
-                  <input
                     value={rc.name}
                     onChange={(e) => onUpdate(rc.control, { name: e.target.value })}
                     placeholder="e.g. Prewarning"
                     className="w-48 rounded border border-gray-300 px-2 py-0.5 text-sm"
-                  />
-                </td>
-                <td className="px-2 py-1">
-                  <input
-                    value={rc.corder}
-                    aria-label={`corder for control ${rc.control}`}
-                    onChange={(e) =>
-                      onUpdate(rc.control, { corder: Number(e.target.value) || 0 })
-                    }
-                    className="w-16 rounded border border-gray-300 px-2 py-0.5 text-sm tabular-nums"
                   />
                 </td>
               </tr>
