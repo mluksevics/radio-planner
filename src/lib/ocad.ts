@@ -89,12 +89,26 @@ export async function parseOcadCourse(file: File): Promise<OcadCourseImport> {
     const pts = clean.get(code) ?? suffixed.get(code)!;
     coords[code] = average(pts);
   }
-  // finish position from the dedicated finish symbol
-  const finishPts = ocad.objects
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .filter((o: any) => o.sym === FINISH_SYM)
-    .map(objCentroid);
-  if (finishPts.length) coords["F1"] = average(finishPts);
+  // finish position(s) from the dedicated finish symbol. A finish marker may
+  // carry its code as text ("F1".."F4"); use that when present, otherwise keep
+  // the unlabelled positions to fall back on for whatever finish the courses
+  // reference (so a course finishing at F2 still gets a position).
+  const labelledFinish = new Map<string, Coord[]>();
+  const unlabelledFinish: Coord[] = [];
+  for (const o of ocad.objects) {
+    if (o.sym !== FINISH_SYM) continue;
+    const t = stripVariant(o.text);
+    if (/^F\d+$/.test(t)) {
+      (labelledFinish.get(t) ?? labelledFinish.set(t, []).get(t)!).push(
+        objCentroid(o),
+      );
+    } else {
+      unlabelledFinish.push(objCentroid(o));
+    }
+  }
+  for (const [code, pts] of labelledFinish) {
+    if (!coords[code]) coords[code] = average(pts);
+  }
 
   // 2. courses (rec type 2) + class->course mapping (rec type 3)
   const courseStrings = ocad.parameterStrings[2] ?? [];
@@ -105,6 +119,16 @@ export async function parseOcadCourse(file: File): Promise<OcadCourseImport> {
     const label = asString(cl._first);
     if (!course || !label) continue;
     (courseToClasses.get(course) ?? courseToClasses.set(course, []).get(course)!).push(label);
+  }
+
+  // give any finish a position before measuring legs: prefer a labelled finish
+  // marker, else the unlabelled finish symbol(s).
+  const fallbackFinish = unlabelledFinish.length
+    ? average(unlabelledFinish)
+    : undefined;
+  for (const c of courseStrings) {
+    const finish = asString(c.f) || "F1";
+    if (!coords[finish] && fallbackFinish) coords[finish] = fallbackFinish;
   }
 
   const rows: CourseRow[] = [];
@@ -122,8 +146,7 @@ export async function parseOcadCourse(file: File): Promise<OcadCourseImport> {
       const b = coords[seq[i]];
       const km = a && b ? distanceM(a, b) / 1000 : 0;
       length += km;
-      const isFinish = i === seq.length - 1;
-      legs.push({ dist: round3(km), code: isFinish ? "F1" : seq[i] });
+      legs.push({ dist: round3(km), code: seq[i] });
     }
 
     const classLabel = (courseToClasses.get(course) ?? []).join(" ").trim() || course;

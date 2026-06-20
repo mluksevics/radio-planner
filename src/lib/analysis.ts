@@ -9,13 +9,16 @@ export interface ControlUsage {
 
 export const FINISH = "F1";
 
+/** A finish code is "F" followed by digits (F1, F2, F3, F4…). */
+export const isFinish = (code: string): boolean => /^F\d+$/.test(code);
+
 /** Count how many course rows include each control (excluding the finish), sorted desc. */
 export function controlUsage(rows: CourseRow[]): ControlUsage[] {
   const map = new Map<string, { count: number; classes: string[] }>();
   for (const row of rows) {
     const seen = new Set<string>();
     for (const leg of row.legs) {
-      if (leg.code === FINISH || seen.has(leg.code)) continue;
+      if (isFinish(leg.code) || seen.has(leg.code)) continue;
       seen.add(leg.code);
       const entry = map.get(leg.code) ?? { count: 0, classes: [] };
       entry.count += 1;
@@ -40,7 +43,7 @@ export function classControlCount(rows: CourseRow[]): Map<string, number> {
   for (const entry of expandClasses(rows)) {
     const seen = new Set<string>();
     for (const leg of entry.row.legs) {
-      if (leg.code === FINISH || seen.has(leg.code)) continue;
+      if (isFinish(leg.code) || seen.has(leg.code)) continue;
       seen.add(leg.code);
       m.set(leg.code, (m.get(leg.code) ?? 0) + 1);
     }
@@ -170,7 +173,7 @@ export function buildOverview(
     const firstIdx = new Map<string, number>();
     let n = 0;
     for (const leg of entry.row.legs) {
-      if (leg.code === FINISH) continue;
+      if (isFinish(leg.code)) continue;
       n += 1;
       if (!firstIdx.has(leg.code)) firstIdx.set(leg.code, n);
     }

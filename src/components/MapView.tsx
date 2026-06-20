@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Coord, RadioControl } from "@/lib/types";
-import { LegUsage } from "@/lib/analysis";
+import { LegUsage, isFinish } from "@/lib/analysis";
 import { OcadBackground, Bounds } from "@/lib/ocadBackground";
-import { buildDistanceMatrix, FINISH } from "@/lib/distances";
+import { buildDistanceMatrix } from "@/lib/distances";
 import { heatColor, radioColor, HeatScheme } from "@/lib/heatmap";
 
 interface Props {
@@ -28,6 +28,12 @@ interface View {
 
 const BG_MAX = 2400; // px for the longest side of the offscreen background
 const BG_OPACITY_KEY = "radio-bg-opacity";
+const VIEW_KEY = "radio-map-view";
+
+// signature of the things the screen-space view depends on; a saved view is
+// only valid (restorable) while this is unchanged — otherwise we re-fit.
+const viewSig = (bounds: Bounds, w: number, h: number) =>
+  `${bounds.map((n) => Math.round(n)).join(",")}|${Math.round(w)}x${Math.round(h)}`;
 const isStart = (code: string) => /^S\d+/.test(code);
 
 export default function MapView({
@@ -54,6 +60,7 @@ export default function MapView({
   const [heatCeil, setHeatCeil] = useState(1);
   const [heatScheme, setHeatScheme] = useState<HeatScheme>("red");
   const lastFitRef = useRef<Bounds | null>(null);
+  const viewReadyRef = useRef(false);
 
   // restore persisted map opacity (state resets on tab switch / remount)
   useEffect(() => {
@@ -172,11 +179,41 @@ export default function MapView({
   // or once the container has been measured; manual pan/zoom leaves bounds
   // unchanged so it is not overridden.
   useEffect(() => {
-    if (worldBounds && size.w > 0 && lastFitRef.current !== worldBounds) {
-      fit();
-      lastFitRef.current = worldBounds;
+    if (!worldBounds || size.w === 0 || size.h === 0) return;
+    if (lastFitRef.current === worldBounds) return;
+    lastFitRef.current = worldBounds;
+    // restore a saved view if it still matches the current bounds/size,
+    // otherwise fit. Either way the view is now "ready" to be persisted.
+    const sig = viewSig(worldBounds, size.w, size.h);
+    try {
+      const raw = window.localStorage.getItem(VIEW_KEY);
+      const v = raw ? JSON.parse(raw) : null;
+      if (v && v.sig === sig && Number.isFinite(v.k)) {
+        setView({ k: v.k, tx: v.tx, ty: v.ty });
+        viewReadyRef.current = true;
+        return;
+      }
+    } catch {
+      /* ignore malformed storage */
     }
+    fit();
+    viewReadyRef.current = true;
   }, [worldBounds, size, fit]);
+
+  // persist the view (zoom + pan) shortly after it settles, tagged with the
+  // signature it is valid for, so it survives tab switches / reloads
+  useEffect(() => {
+    if (!viewReadyRef.current || !worldBounds || size.w === 0) return;
+    const sig = viewSig(worldBounds, size.w, size.h);
+    const id = setTimeout(() => {
+      try {
+        window.localStorage.setItem(VIEW_KEY, JSON.stringify({ ...view, sig }));
+      } catch {
+        /* ignore quota errors */
+      }
+    }, 250);
+    return () => clearTimeout(id);
+  }, [view, worldBounds, size]);
 
   // draw visible canvas
   useEffect(() => {
@@ -214,7 +251,7 @@ export default function MapView({
         sy: by * view.k + view.ty,
         selected: !!selection[code],
         start: isStart(code),
-        finish: code === FINISH,
+        finish: isFinish(code),
       };
     });
   }, [codes, coords, toBasePx, view, selection]);
@@ -537,7 +574,7 @@ function DistancePanel({
               <th
                 key={l}
                 className="px-2 py-1 text-right font-semibold"
-                style={{ color: l === FINISH ? "#7c3aed" : radioColor(l) }}
+                style={{ color: isFinish(l) ? "#7c3aed" : radioColor(l) }}
               >
                 {l}
               </th>
@@ -549,7 +586,7 @@ function DistancePanel({
             <tr key={row} className="border-t border-gray-100">
               <th
                 className="px-2 py-1 text-left font-semibold"
-                style={{ color: row === FINISH ? "#7c3aed" : radioColor(row) }}
+                style={{ color: isFinish(row) ? "#7c3aed" : radioColor(row) }}
               >
                 {row}
               </th>

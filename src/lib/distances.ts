@@ -1,4 +1,5 @@
 import { Coord } from "./types";
+import { isFinish } from "./analysis";
 
 export const FINISH = "F1";
 
@@ -21,8 +22,11 @@ export function buildDistanceMatrix(
   codes: string[],
 ): DistanceMatrix {
   const ordered = [
-    ...codes.filter((c) => c !== FINISH && coords[c]),
-    ...(coords[FINISH] ? [FINISH] : []),
+    ...codes.filter((c) => !isFinish(c) && coords[c]),
+    // all finishes with a known position, in order (F1, F2…), shown last
+    ...Object.keys(coords)
+      .filter(isFinish)
+      .sort((a, b) => a.localeCompare(b)),
   ];
   const meters = ordered.map((a) =>
     ordered.map((b) =>

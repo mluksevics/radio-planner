@@ -82,7 +82,7 @@ function parseV3(doc: Document): XmlCourseImport {
       const legLen = Number(childText(cc, "LegLength"));
       legs.push({
         dist: Number.isFinite(legLen) ? round3(legLen / 1000) : 0,
-        code: type === "Finish" ? "F1" : code,
+        code: type === "Finish" ? code || "F1" : code,
       });
     }
     const classNames = courseToClasses.get(name) ?? [];
@@ -146,7 +146,7 @@ function parseV2(doc: Document): XmlCourseImport {
         const toFin = Number(childText(v, "DistanceToFinish"));
         legs.push({
           dist: Number.isFinite(toFin) ? round3(toFin / 1000) : 0,
-          code: "F1",
+          code: finishCode,
         });
       }
       const vname =

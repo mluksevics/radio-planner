@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CourseRow } from "@/lib/types";
-import { FINISH } from "@/lib/analysis";
+import { isFinish } from "@/lib/analysis";
 import { heatColor, heatText, radioColor } from "@/lib/heatmap";
 import { compareValues, SortDir } from "@/lib/sorting";
 
@@ -48,7 +48,7 @@ function getValue(row: CourseRow, key: string): number | string {
     case "length":
       return row.length;
     case "controls":
-      return row.legs.filter((l) => l.code !== FINISH).length;
+      return row.legs.filter((l) => !isFinish(l.code)).length;
     default:
       return "";
   }
@@ -269,7 +269,7 @@ export default function ExportTable({
     nControls: number;
   } {
     const total = row.legs.reduce((s, l) => s + l.dist, 0) || 1;
-    const nControls = row.legs.filter((l) => l.code !== FINISH).length;
+    const nControls = row.legs.filter((l) => !isFinish(l.code)).length;
     const cells: Cell[] = [
       { code: row.start, kind: "start", cum: 0, pct: 0, leg: 0, idx: 0 },
     ];
@@ -277,15 +277,15 @@ export default function ExportTable({
     let idx = 0;
     for (const leg of row.legs) {
       cum += leg.dist;
-      const isFinish = leg.code === FINISH;
-      if (!isFinish) idx += 1;
+      const finishLeg = isFinish(leg.code);
+      if (!finishLeg) idx += 1;
       cells.push({
         code: leg.code,
-        kind: isFinish ? "finish" : "control",
+        kind: finishLeg ? "finish" : "control",
         cum,
         pct: (cum / total) * 100,
         leg: leg.dist,
-        idx: isFinish ? 0 : idx,
+        idx: finishLeg ? 0 : idx,
       });
     }
     return { cells, total, nControls };
@@ -419,7 +419,7 @@ export default function ExportTable({
 
         {/* body */}
         {view.map((row, i) => {
-          const nControls = row.legs.filter((l) => l.code !== FINISH).length;
+          const nControls = row.legs.filter((l) => !isFinish(l.code)).length;
           return (
             <div
               key={`${row.classLabel}-${row.course}-${i}`}
