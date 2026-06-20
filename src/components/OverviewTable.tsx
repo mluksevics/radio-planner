@@ -20,22 +20,54 @@ function move<T>(arr: T[], from: number, to: number): T[] {
 }
 
 export default function OverviewTable({ rows, controls }: Props) {
-  // manual column order; reconciled with the current selection each render
-  const [order, setOrder] = useState<string[]>(controls);
+  // manual column order (null = auto-ordered by position in the courses)
+  const [manualOrder, setManualOrder] = useState<string[] | null>(null);
   const [dragCol, setDragCol] = useState<number | null>(null);
   const [overCol, setOverCol] = useState<number | null>(null);
 
-  const ordered = useMemo(() => {
-    const set = new Set(controls);
-    const kept = order.filter((c) => set.has(c));
-    const added = controls.filter((c) => !kept.includes(c));
-    return [...kept, ...added];
-  }, [order, controls]);
-
+  // cells are keyed by control code, so column order does not affect values
   const overview = useMemo(
-    () => buildOverview(rows, ordered),
-    [rows, ordered],
+    () => buildOverview(rows, controls),
+    [rows, controls],
   );
+
+  // auto order: controls earlier in the courses come first (smaller mean
+  // cumulative ratio across the classes that pass them); unused ones go last
+  const autoOrder = useMemo(() => {
+    const agg = new Map<string, { sum: number; n: number }>();
+    for (const r of overview) {
+      for (const c of controls) {
+        const cell = r.cells[c];
+        if (!cell) continue;
+        const e = agg.get(c) ?? { sum: 0, n: 0 };
+        e.sum += cell.ratio;
+        e.n += 1;
+        agg.set(c, e);
+      }
+    }
+    const meanRatio = (c: string) => {
+      const e = agg.get(c);
+      return e && e.n > 0 ? e.sum / e.n : Infinity;
+    };
+    return [...controls].sort((a, b) => {
+      const ma = meanRatio(a);
+      const mb = meanRatio(b);
+      if (ma !== mb) return ma - mb;
+      const na = Number(a);
+      const nb = Number(b);
+      return Number.isFinite(na) && Number.isFinite(nb)
+        ? na - nb
+        : a.localeCompare(b);
+    });
+  }, [overview, controls]);
+
+  const ordered = useMemo(() => {
+    if (!manualOrder) return autoOrder;
+    const set = new Set(controls);
+    const kept = manualOrder.filter((c) => set.has(c));
+    const added = autoOrder.filter((c) => !kept.includes(c));
+    return [...kept, ...added];
+  }, [manualOrder, autoOrder, controls]);
 
   const getValue = useCallback(
     (r: OverviewRow, key: string): number | string | null => {
@@ -60,7 +92,7 @@ export default function OverviewTable({ rows, controls }: Props) {
 
   function dropCol(target: number) {
     if (dragCol !== null && dragCol !== target) {
-      setOrder(move(ordered, dragCol, target));
+      setManualOrder(move(ordered, dragCol, target));
     }
     setDragCol(null);
     setOverCol(null);

@@ -27,6 +27,7 @@ interface View {
 }
 
 const BG_MAX = 2400; // px for the longest side of the offscreen background
+const BG_OPACITY_KEY = "radio-bg-opacity";
 const isStart = (code: string) => /^S\d+/.test(code);
 
 export default function MapView({
@@ -53,6 +54,12 @@ export default function MapView({
   const [heatCeil, setHeatCeil] = useState(1);
   const [heatScheme, setHeatScheme] = useState<HeatScheme>("red");
   const lastFitRef = useRef<Bounds | null>(null);
+
+  // restore persisted map opacity (state resets on tab switch / remount)
+  useEffect(() => {
+    const v = Number(window.localStorage.getItem(BG_OPACITY_KEY));
+    if (Number.isFinite(v) && v >= 0 && v <= 1) setBgOpacity(v);
+  }, []);
 
   const codes = useMemo(() => Object.keys(coords), [coords]);
   const hasData = codes.length > 0;
@@ -484,7 +491,11 @@ export default function MapView({
               min={0}
               max={100}
               value={Math.round(bgOpacity * 100)}
-              onChange={(e) => setBgOpacity(Number(e.target.value) / 100)}
+              onChange={(e) => {
+                const v = Number(e.target.value) / 100;
+                setBgOpacity(v);
+                window.localStorage.setItem(BG_OPACITY_KEY, String(v));
+              }}
               className="w-28"
             />
             <span className="w-9 text-right tabular-nums">
