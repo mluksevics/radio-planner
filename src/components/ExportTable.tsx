@@ -27,8 +27,10 @@ const CLASS_KEY = "radio-class-width";
 // stretched-layout geometry (px)
 const BOX_H = 24;
 const LAYOUT_KEY = "radio-ctrl-layout";
+const ANCHOR_KEY = "radio-ctrl-anchor";
 
 type LayoutMode = "even" | "scaled" | "fill";
+type BoxAnchor = "leaving" | "arriving";
 
 interface Cell {
   code: string;
@@ -80,6 +82,7 @@ export default function ExportTable({
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [classWidth, setClassWidth] = useState(150);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("even");
+  const [boxAnchor, setBoxAnchor] = useState<BoxAnchor>("leaving");
   const classWidthRef = useRef(classWidth);
   classWidthRef.current = classWidth;
 
@@ -104,11 +107,18 @@ export default function ExportTable({
     if (Number.isFinite(w) && w >= CLASS_MIN) setClassWidth(w);
     const m = window.localStorage.getItem(LAYOUT_KEY);
     if (m === "even" || m === "scaled" || m === "fill") setLayoutMode(m);
+    const a = window.localStorage.getItem(ANCHOR_KEY);
+    if (a === "leaving" || a === "arriving") setBoxAnchor(a);
   }, []);
 
   function chooseLayout(m: LayoutMode) {
     setLayoutMode(m);
     window.localStorage.setItem(LAYOUT_KEY, m);
+  }
+
+  function chooseAnchor(a: BoxAnchor) {
+    setBoxAnchor(a);
+    window.localStorage.setItem(ANCHOR_KEY, a);
   }
 
   const startClassResize = useCallback((e: React.MouseEvent) => {
@@ -210,15 +220,27 @@ export default function ExportTable({
   );
 
   // the inner control glyph (button for controls, plain chip for start/finish).
-  // `wide`: stretched layouts where the box fills the gap → left-align the number
-  // at the control's actual position.
-  function cellInner(c: Cell, nControls: number, wide = false) {
+  // `align`: stretched layouts where the box fills the gap → align the number to
+  // the control's actual position — left for "leaving" boxes (anchored at the
+  // control), right for "arriving" boxes (anchored at the next control).
+  function cellInner(
+    c: Cell,
+    nControls: number,
+    align: "center" | "left" | "right" = "center",
+  ) {
     const { code, kind, cum, pct, leg, idx } = c;
+    const wide = align !== "center";
+    const alignClass =
+      align === "right"
+        ? "text-right"
+        : align === "left"
+          ? "text-left"
+          : "text-center";
     if (kind !== "control") {
       return (
         <span
           className={`rounded bg-gray-100 px-1 py-0.5 text-xs font-medium text-gray-600 ${
-            wide ? "block w-full text-left" : ""
+            wide ? `block w-full ${alignClass}` : ""
           }`}
         >
           {code}
@@ -249,9 +271,7 @@ export default function ExportTable({
         onClick={() => onToggle(code)}
         style={style}
         title={title}
-        className={`w-full rounded px-1 py-0.5 text-xs font-semibold tabular-nums transition ${
-          wide ? "text-left" : "text-center"
-        } ${
+        className={`w-full rounded px-1 py-0.5 text-xs font-semibold tabular-nums transition ${alignClass} ${
           selected
             ? "shadow-sm ring-1 ring-black/10"
             : "hover:ring-1 hover:ring-gray-300"
@@ -317,14 +337,28 @@ export default function ExportTable({
       contentW = (xs.length ? xs[xs.length - 1] : 0) + boxW;
       gridCenter = (p) => p * total * scale + boxW / 2;
     }
-    // each box fills the gap up to the next control (so the row fills the
-    // width); the last (finish) keeps a single box width.
-    const placed = cells.map((c, i) => ({
-      ...c,
-      x: xs[i],
-      w: i < xs.length - 1 ? Math.max(boxW, xs[i + 1] - xs[i]) : boxW,
-    }));
-    return { placed, contentW, gridCenter, nControls };
+    // "leaving" (default): each box starts at its control and fills the gap up
+    //   to the NEXT control (code left-aligned at the control's true position);
+    //   the last (finish) keeps a single box width.
+    // "arriving": each box ENDS at its control and spans the leg from the
+    //   PREVIOUS control (code right-aligned). The start has no arriving leg, so
+    //   it becomes a fixed-width marker and the whole track shifts right by one
+    //   box to make room — this keeps the fill-mode % gridlines aligned, since
+    //   the code centre still lands at p·usable + boxW/2 either way.
+    const placed = cells.map((c, i) => {
+      if (boxAnchor === "arriving") {
+        if (i === 0) return { ...c, x: 0, w: boxW };
+        const w = Math.max(boxW, xs[i] - xs[i - 1]);
+        return { ...c, x: xs[i] + boxW - w, w };
+      }
+      return {
+        ...c,
+        x: xs[i],
+        w: i < xs.length - 1 ? Math.max(boxW, xs[i + 1] - xs[i]) : boxW,
+      };
+    });
+    const trackW = placed.reduce((m, p) => Math.max(m, p.x + p.w), contentW);
+    return { placed, contentW: trackW, gridCenter, nControls };
   }
 
   return (
@@ -392,6 +426,30 @@ export default function ExportTable({
             </div>
             {layoutMode !== "even" && (
               <>
+                <div
+                  className="flex overflow-hidden rounded border border-gray-300 text-[10px] font-medium"
+                  title="Whether each box spans the leg leaving a control (to the next) or arriving at it (from the previous, matching the route to a control)"
+                >
+                  {(
+                    [
+                      ["leaving", "leg leaving"],
+                      ["arriving", "leg arriving"],
+                    ] as [BoxAnchor, string][]
+                  ).map(([a, label]) => (
+                    <button
+                      key={a}
+                      type="button"
+                      onClick={() => chooseAnchor(a)}
+                      className={`px-2 py-0.5 ${
+                        boxAnchor === a
+                          ? "bg-blue-600 text-white"
+                          : "bg-white text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
                 <label
                   className="flex items-center gap-1 text-[10px] font-normal text-gray-400"
                   title="Compact or stretch horizontally — centre fits the table width"
@@ -499,7 +557,11 @@ export default function ExportTable({
                             className="absolute top-0 flex justify-start"
                             style={{ left: c.x, width: c.w }}
                           >
-                            {cellInner(c, nControls, true)}
+                            {cellInner(
+                              c,
+                              nControls,
+                              boxAnchor === "arriving" ? "right" : "left",
+                            )}
                           </div>
                         ))}
                       </div>
