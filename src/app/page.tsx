@@ -9,6 +9,8 @@ import {
   legUsage,
   legUsageRanks,
   classControlCount,
+  startCodes,
+  finishCodes,
 } from "@/lib/analysis";
 import {
   loadLocal,
@@ -286,6 +288,8 @@ export default function Home() {
     () => classControlCount(state.rows),
     [state.rows],
   );
+  const startSet = useMemo(() => startCodes(state.rows), [state.rows]);
+  const finishSet = useMemo(() => finishCodes(state.rows), [state.rows]);
   const selectedControls = useMemo(
     () =>
       Object.keys(state.selection).sort((a, b) => {
@@ -438,6 +442,8 @@ export default function Home() {
                 legs={legs}
                 legRank={legRank}
                 legMaxRank={legMaxRank}
+                startCodes={startSet}
+                finishCodes={finishSet}
                 heatRank={heatRank}
                 maxRank={maxRank}
                 usage={controlClassCount}

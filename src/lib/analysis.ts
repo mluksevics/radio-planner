@@ -7,18 +7,32 @@ export interface ControlUsage {
   classes: string[];
 }
 
-export const FINISH = "F1";
+/**
+ * Start / finish codes are identified structurally from the parsed courses, not
+ * by name: every importer records each course's `start` and ends each course's
+ * `legs` with the finish. This way arbitrary names work — "S"/"S2", or "Depart"
+ * (FR) for starts, "Ziel" (DE) for finishes — without relying on an "S"/"F".
+ */
+export function startCodes(rows: CourseRow[]): Set<string> {
+  const s = new Set<string>();
+  for (const r of rows) if (r.start) s.add(r.start);
+  return s;
+}
 
-/** A finish code is "F" followed by digits (F1, F2, F3, F4…). */
-export const isFinish = (code: string): boolean => /^F\d+$/.test(code);
+export function finishCodes(rows: CourseRow[]): Set<string> {
+  const s = new Set<string>();
+  for (const r of rows) if (r.legs.length) s.add(r.legs[r.legs.length - 1].code);
+  return s;
+}
 
 /** Count how many course rows include each control (excluding the finish), sorted desc. */
 export function controlUsage(rows: CourseRow[]): ControlUsage[] {
+  const fin = finishCodes(rows);
   const map = new Map<string, { count: number; classes: string[] }>();
   for (const row of rows) {
     const seen = new Set<string>();
     for (const leg of row.legs) {
-      if (isFinish(leg.code) || seen.has(leg.code)) continue;
+      if (fin.has(leg.code) || seen.has(leg.code)) continue;
       seen.add(leg.code);
       const entry = map.get(leg.code) ?? { count: 0, classes: [] };
       entry.count += 1;
@@ -39,11 +53,12 @@ export function usageCountMap(rows: CourseRow[]): Map<string, number> {
 
 /** Count how many classes' courses include each control (per class, excluding the finish). */
 export function classControlCount(rows: CourseRow[]): Map<string, number> {
+  const fin = finishCodes(rows);
   const m = new Map<string, number>();
   for (const entry of expandClasses(rows)) {
     const seen = new Set<string>();
     for (const leg of entry.row.legs) {
-      if (isFinish(leg.code) || seen.has(leg.code)) continue;
+      if (fin.has(leg.code) || seen.has(leg.code)) continue;
       seen.add(leg.code);
       m.set(leg.code, (m.get(leg.code) ?? 0) + 1);
     }
@@ -168,12 +183,13 @@ export function buildOverview(
   rows: CourseRow[],
   controls: string[],
 ): OverviewRow[] {
+  const fin = finishCodes(rows);
   return expandClasses(rows).map((entry) => {
     // 1-based control index of the first occurrence of each control
     const firstIdx = new Map<string, number>();
     let n = 0;
     for (const leg of entry.row.legs) {
-      if (isFinish(leg.code)) continue;
+      if (fin.has(leg.code)) continue;
       n += 1;
       if (!firstIdx.has(leg.code)) firstIdx.set(leg.code, n);
     }

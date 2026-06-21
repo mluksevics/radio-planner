@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Coord, RadioControl } from "@/lib/types";
-import { LegUsage, isFinish } from "@/lib/analysis";
+import { LegUsage } from "@/lib/analysis";
 import { OcadBackground, Bounds } from "@/lib/ocadBackground";
 import { buildDistanceMatrix } from "@/lib/distances";
 import { heatColor, radioColor, HeatScheme } from "@/lib/heatmap";
@@ -14,6 +14,9 @@ interface Props {
   legs: LegUsage[];
   legRank: Map<string, number>;
   legMaxRank: number;
+  /** structurally-identified start / finish codes (not name-based) */
+  startCodes: Set<string>;
+  finishCodes: Set<string>;
   heatRank: Map<string, number>;
   maxRank: number;
   usage: Map<string, number>;
@@ -34,7 +37,6 @@ const VIEW_KEY = "radio-map-view";
 // only valid (restorable) while this is unchanged — otherwise we re-fit.
 const viewSig = (bounds: Bounds, w: number, h: number) =>
   `${bounds.map((n) => Math.round(n)).join(",")}|${Math.round(w)}x${Math.round(h)}`;
-const isStart = (code: string) => /^S\d+/.test(code);
 
 export default function MapView({
   coords,
@@ -43,6 +45,8 @@ export default function MapView({
   legs,
   legRank,
   legMaxRank,
+  startCodes,
+  finishCodes,
   heatRank,
   maxRank,
   usage,
@@ -250,11 +254,11 @@ export default function MapView({
         sx: bx * view.k + view.tx,
         sy: by * view.k + view.ty,
         selected: !!selection[code],
-        start: isStart(code),
-        finish: isFinish(code),
+        start: startCodes.has(code),
+        finish: finishCodes.has(code),
       };
     });
-  }, [codes, coords, toBasePx, view, selection]);
+  }, [codes, coords, toBasePx, view, selection, startCodes, finishCodes]);
 
   // leg segments (spiderweb) in screen space, colored by usage heat
   const legSegments = useMemo(() => {
@@ -289,9 +293,10 @@ export default function MapView({
     () =>
       buildDistanceMatrix(
         coords,
-        Object.keys(selection).filter((c) => coords[c] && !isStart(c)),
+        Object.keys(selection).filter((c) => coords[c] && !startCodes.has(c)),
+        finishCodes,
       ),
-    [coords, selection],
+    [coords, selection, startCodes, finishCodes],
   );
 
   // wheel zoom (non-passive) + drag pan
@@ -542,15 +547,17 @@ export default function MapView({
         )}
       </div>
 
-      <DistancePanel matrix={matrix} />
+      <DistancePanel matrix={matrix} finishCodes={finishCodes} />
     </div>
   );
 }
 
 function DistancePanel({
   matrix,
+  finishCodes,
 }: {
   matrix: ReturnType<typeof buildDistanceMatrix>;
+  finishCodes: Set<string>;
 }) {
   if (matrix.labels.length < 2) {
     return (
@@ -574,7 +581,7 @@ function DistancePanel({
               <th
                 key={l}
                 className="px-2 py-1 text-right font-semibold"
-                style={{ color: isFinish(l) ? "#7c3aed" : radioColor(l) }}
+                style={{ color: finishCodes.has(l) ? "#7c3aed" : radioColor(l) }}
               >
                 {l}
               </th>
@@ -586,7 +593,7 @@ function DistancePanel({
             <tr key={row} className="border-t border-gray-100">
               <th
                 className="px-2 py-1 text-left font-semibold"
-                style={{ color: isFinish(row) ? "#7c3aed" : radioColor(row) }}
+                style={{ color: finishCodes.has(row) ? "#7c3aed" : radioColor(row) }}
               >
                 {row}
               </th>

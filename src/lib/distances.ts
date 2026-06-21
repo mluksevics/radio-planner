@@ -1,7 +1,4 @@
 import { Coord } from "./types";
-import { isFinish } from "./analysis";
-
-export const FINISH = "F1";
 
 export const distanceMeters = (a: Coord, b: Coord): number =>
   Math.hypot(a.x - b.x, a.y - b.y);
@@ -14,18 +11,20 @@ export interface DistanceMatrix {
 }
 
 /**
- * Straight-line distance matrix between the given control codes plus the finish
- * (if its position is known). Codes without a position are dropped.
+ * Straight-line distance matrix between the given control codes plus the
+ * finishes (those with a known position), shown last. Codes without a position
+ * are dropped. `finishCodes` are identified structurally by the caller.
  */
 export function buildDistanceMatrix(
   coords: Record<string, Coord>,
   codes: string[],
+  finishCodes: Set<string>,
 ): DistanceMatrix {
   const ordered = [
-    ...codes.filter((c) => !isFinish(c) && coords[c]),
-    // all finishes with a known position, in order (F1, F2…), shown last
-    ...Object.keys(coords)
-      .filter(isFinish)
+    ...codes.filter((c) => !finishCodes.has(c) && coords[c]),
+    // all finishes with a known position, in order, shown last
+    ...[...finishCodes]
+      .filter((c) => coords[c])
       .sort((a, b) => a.localeCompare(b)),
   ];
   const meters = ordered.map((a) =>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CourseRow } from "@/lib/types";
-import { isFinish } from "@/lib/analysis";
+import { finishCodes } from "@/lib/analysis";
 import { heatColor, heatText, radioColor } from "@/lib/heatmap";
 import { compareValues, SortDir } from "@/lib/sorting";
 
@@ -43,14 +43,18 @@ interface Cell {
   idx: number;
 }
 
-function getValue(row: CourseRow, key: string): number | string {
+function getValue(
+  row: CourseRow,
+  key: string,
+  fin: Set<string>,
+): number | string {
   switch (key) {
     case "class":
       return row.classLabel;
     case "length":
       return row.length;
     case "controls":
-      return row.legs.filter((l) => !isFinish(l.code)).length;
+      return row.legs.filter((l) => !fin.has(l.code)).length;
     default:
       return "";
   }
@@ -142,15 +146,22 @@ export default function ExportTable({
     document.addEventListener("mouseup", onUp);
   }, []);
 
+  // start/finish identified structurally (each course's start, and its last
+  // leg), so arbitrary names work ("S"/"S2", "Depart", "Ziel")
+  const finishSet = useMemo(() => finishCodes(rows), [rows]);
+
   const view = useMemo(() => {
     if (!sort) return rows;
     const indexed = rows.map((r, i) => [r, i] as [CourseRow, number]);
     indexed.sort((x, y) => {
-      const c = compareValues(getValue(x[0], sort.key), getValue(y[0], sort.key));
+      const c = compareValues(
+        getValue(x[0], sort.key, finishSet),
+        getValue(y[0], sort.key, finishSet),
+      );
       return (sort.dir === "asc" ? c : -c) || x[1] - y[1];
     });
     return indexed.map((p) => p[0]);
-  }, [rows, sort]);
+  }, [rows, sort, finishSet]);
 
   // longest course (summed legs) → reference for the "scaled" layout
   const maxTotal = useMemo(
@@ -289,7 +300,7 @@ export default function ExportTable({
     nControls: number;
   } {
     const total = row.legs.reduce((s, l) => s + l.dist, 0) || 1;
-    const nControls = row.legs.filter((l) => !isFinish(l.code)).length;
+    const nControls = row.legs.filter((l) => !finishSet.has(l.code)).length;
     const cells: Cell[] = [
       { code: row.start, kind: "start", cum: 0, pct: 0, leg: 0, idx: 0 },
     ];
@@ -297,7 +308,7 @@ export default function ExportTable({
     let idx = 0;
     for (const leg of row.legs) {
       cum += leg.dist;
-      const finishLeg = isFinish(leg.code);
+      const finishLeg = finishSet.has(leg.code);
       if (!finishLeg) idx += 1;
       cells.push({
         code: leg.code,
@@ -432,8 +443,8 @@ export default function ExportTable({
                 >
                   {(
                     [
-                      ["leaving", "leg leaving"],
                       ["arriving", "leg arriving"],
+                      ["leaving", "leg leaving"],
                     ] as [BoxAnchor, string][]
                   ).map(([a, label]) => (
                     <button
@@ -477,7 +488,7 @@ export default function ExportTable({
 
         {/* body */}
         {view.map((row, i) => {
-          const nControls = row.legs.filter((l) => !isFinish(l.code)).length;
+          const nControls = row.legs.filter((l) => !finishSet.has(l.code)).length;
           return (
             <div
               key={`${row.classLabel}-${row.course}-${i}`}
