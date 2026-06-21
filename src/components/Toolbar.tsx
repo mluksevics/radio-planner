@@ -23,21 +23,10 @@ export default function Toolbar({
 
   return (
     <div className="flex flex-wrap items-center gap-2 print:hidden">
-      <button
-        onClick={onCopyLink}
-        disabled={linkSaving}
-        className="rounded border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-60"
-        title="Save this version to the server and copy a shareable /id link"
-      >
-        {linkSaving ? "Saving…" : linkCopied ? "Link copied!" : "Save & copy link"}
-      </button>
-      <button
-        onClick={onSaveJson}
+      <label
         className="rounded border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50"
+        title="Load a plan from a .json file on your computer"
       >
-        Save JSON
-      </button>
-      <label className="cursor-pointer rounded border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50">
         Load JSON
         <input
           ref={fileRef}
@@ -51,6 +40,21 @@ export default function Toolbar({
           }}
         />
       </label>
+      <button
+        onClick={onSaveJson}
+        className="rounded border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50"
+        title="Download the current plan as a .json file to your computer"
+      >
+        Save JSON
+      </button>
+      <button
+        onClick={onCopyLink}
+        disabled={linkSaving}
+        className="rounded border border-gray-300 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-60"
+        title="Save this version to the server and copy a shareable /id link"
+      >
+        {linkSaving ? "Saving…" : linkCopied ? "Link copied!" : "Save & copy link"}
+      </button>
       <button
         onClick={onExportExcel}
         className="rounded bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800"
