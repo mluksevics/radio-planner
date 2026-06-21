@@ -82,7 +82,7 @@ export default function ExportTable({
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [classWidth, setClassWidth] = useState(150);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("even");
-  const [boxAnchor, setBoxAnchor] = useState<BoxAnchor>("leaving");
+  const [boxAnchor, setBoxAnchor] = useState<BoxAnchor>("arriving");
   const classWidthRef = useRef(classWidth);
   classWidthRef.current = classWidth;
 
