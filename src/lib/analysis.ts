@@ -51,16 +51,19 @@ export function usageCountMap(rows: CourseRow[]): Map<string, number> {
   return m;
 }
 
-/** Count how many classes' courses include each control (per class, excluding the finish). */
-export function classControlCount(rows: CourseRow[]): Map<string, number> {
-  const fin = finishCodes(rows);
+/**
+ * Count how many classes' courses touch each code (per class) — start, controls
+ * and finish alike. Used for the map marker tooltips.
+ */
+export function classCodeCount(rows: CourseRow[]): Map<string, number> {
   const m = new Map<string, number>();
   for (const entry of expandClasses(rows)) {
     const seen = new Set<string>();
-    for (const leg of entry.row.legs) {
-      if (fin.has(leg.code) || seen.has(leg.code)) continue;
-      seen.add(leg.code);
-      m.set(leg.code, (m.get(leg.code) ?? 0) + 1);
+    const codes = [entry.row.start, ...entry.row.legs.map((l) => l.code)];
+    for (const code of codes) {
+      if (!code || seen.has(code)) continue;
+      seen.add(code);
+      m.set(code, (m.get(code) ?? 0) + 1);
     }
   }
   return m;

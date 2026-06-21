@@ -8,7 +8,7 @@ import {
   usageRanks,
   legUsage,
   legUsageRanks,
-  classControlCount,
+  classCodeCount,
   startCodes,
   finishCodes,
 } from "@/lib/analysis";
@@ -284,8 +284,8 @@ export default function Home() {
     () => legUsageRanks(legs),
     [legs],
   );
-  const controlClassCount = useMemo(
-    () => classControlCount(state.rows),
+  const codeClassCount = useMemo(
+    () => classCodeCount(state.rows),
     [state.rows],
   );
   const startSet = useMemo(() => startCodes(state.rows), [state.rows]);
@@ -446,7 +446,7 @@ export default function Home() {
                 finishCodes={finishSet}
                 heatRank={heatRank}
                 maxRank={maxRank}
-                usage={controlClassCount}
+                usage={codeClassCount}
                 onToggle={(control) =>
                   dispatch({ type: "TOGGLE_CONTROL", control })
                 }

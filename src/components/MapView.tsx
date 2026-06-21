@@ -374,8 +374,12 @@ export default function MapView({
           ))}
           {markers.map((m) => {
             if (m.start || m.finish) {
+              const n = usage.get(m.code) ?? 0;
               return (
-                <g key={m.code}>
+                <g key={m.code} className="pointer-events-auto cursor-help">
+                  <title>{`${m.code}: used in ${n} ${n === 1 ? "class" : "classes"}`}</title>
+                  {/* invisible hit area so hover works over the whole glyph */}
+                  <circle cx={m.sx} cy={m.sy} r={10} fill="transparent" />
                   {m.start ? (
                     <polygon
                       points={`${m.sx},${m.sy - 9} ${m.sx - 8},${m.sy + 6} ${m.sx + 8},${m.sy + 6}`}
