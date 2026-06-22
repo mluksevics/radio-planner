@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -15,6 +15,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Radio Controls Planner",
   description: "Plan radio controls for orienteering events",
+};
+
+// Render the full desktop layout on mobile at a fixed 1920px width; the browser
+// shrinks it to fit the screen and the user can pinch-zoom in.
+export const viewport: Viewport = {
+  width: 1920,
 };
 
 export default function RootLayout({

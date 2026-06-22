@@ -314,13 +314,7 @@ export default function Home() {
 
   return (
     <>
-      <div className="flex h-screen flex-col items-center justify-center gap-2 p-8 text-center md:hidden print:hidden">
-        <h1 className="text-lg font-bold">Radio Controls Planner</h1>
-        <p className="text-sm text-gray-500">
-          Not suitable for mobile. Please open on a desktop or wider screen.
-        </p>
-      </div>
-      <main className="hidden h-screen flex-col gap-2 p-3 md:flex print:flex print:h-auto print:block">
+      <main className="flex h-screen flex-col gap-2 p-3 print:flex print:h-auto print:block">
       <header className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <div className="flex items-baseline gap-3">
           <h1 className="text-lg font-bold whitespace-nowrap">
