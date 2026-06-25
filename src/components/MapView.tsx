@@ -29,7 +29,7 @@ interface View {
   ty: number;
 }
 
-const BG_MAX = 2400; // px for the longest side of the offscreen background
+const BG_MAX = 4096; // px for the longest side of the offscreen background
 const BG_OPACITY_KEY = "radio-bg-opacity";
 const VIEW_KEY = "radio-map-view";
 
@@ -139,19 +139,23 @@ export default function MapView({
     ctx.fillRect(0, 0, w, h);
     const px = (x: number) => (x - minX) * baseScale;
     const py = (y: number) => (maxY - y) * baseScale;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
     for (const f of background.features) {
       ctx.globalAlpha = f.alpha;
       if (f.kind === "area") {
         ctx.fillStyle = f.color;
         ctx.beginPath();
-        (f.coords as number[][]).forEach(([x, y], i) =>
-          i === 0 ? ctx.moveTo(px(x), py(y)) : ctx.lineTo(px(x), py(y)),
-        );
-        ctx.closePath();
-        ctx.fill();
+        for (const ring of f.coords as number[][][]) {
+          ring.forEach(([x, y], i) =>
+            i === 0 ? ctx.moveTo(px(x), py(y)) : ctx.lineTo(px(x), py(y)),
+          );
+          ctx.closePath();
+        }
+        ctx.fill("evenodd");
       } else if (f.kind === "line") {
         ctx.strokeStyle = f.color;
-        ctx.lineWidth = 1;
+        ctx.lineWidth = Math.max(0.75, (f.width ?? 0) * baseScale);
         ctx.beginPath();
         (f.coords as number[][]).forEach(([x, y], i) =>
           i === 0 ? ctx.moveTo(px(x), py(y)) : ctx.lineTo(px(x), py(y)),
@@ -160,7 +164,9 @@ export default function MapView({
       } else {
         const [x, y] = f.coords as number[];
         ctx.fillStyle = f.color;
-        ctx.fillRect(px(x) - 1, py(y) - 1, 2, 2);
+        ctx.beginPath();
+        ctx.arc(px(x), py(y), 1.5, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
     return off;
