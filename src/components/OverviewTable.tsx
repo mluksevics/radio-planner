@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { CourseRow } from "@/lib/types";
-import { buildOverview, OverviewRow } from "@/lib/analysis";
+import { buildOverview, orderControlsByCourse, OverviewRow } from "@/lib/analysis";
 import { useTableSort } from "@/lib/sorting";
 import { radioColor } from "@/lib/heatmap";
 import SortTh from "./SortTh";
@@ -33,33 +33,10 @@ export default function OverviewTable({ rows, controls }: Props) {
 
   // auto order: controls earlier in the courses come first (smaller mean
   // cumulative ratio across the classes that pass them); unused ones go last
-  const autoOrder = useMemo(() => {
-    const agg = new Map<string, { sum: number; n: number }>();
-    for (const r of overview) {
-      for (const c of controls) {
-        const cell = r.cells[c];
-        if (!cell) continue;
-        const e = agg.get(c) ?? { sum: 0, n: 0 };
-        e.sum += cell.ratio;
-        e.n += 1;
-        agg.set(c, e);
-      }
-    }
-    const meanRatio = (c: string) => {
-      const e = agg.get(c);
-      return e && e.n > 0 ? e.sum / e.n : Infinity;
-    };
-    return [...controls].sort((a, b) => {
-      const ma = meanRatio(a);
-      const mb = meanRatio(b);
-      if (ma !== mb) return ma - mb;
-      const na = Number(a);
-      const nb = Number(b);
-      return Number.isFinite(na) && Number.isFinite(nb)
-        ? na - nb
-        : a.localeCompare(b);
-    });
-  }, [overview, controls]);
+  const autoOrder = useMemo(
+    () => orderControlsByCourse(overview, controls),
+    [overview, controls],
+  );
 
   const ordered = useMemo(() => {
     if (!manualOrder) return autoOrder;

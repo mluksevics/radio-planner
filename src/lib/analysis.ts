@@ -217,6 +217,39 @@ export function buildOverview(
   });
 }
 
+/**
+ * Order controls by their position in the courses: those reached earlier (lower
+ * mean cumulative-distance ratio across the classes that pass them) come first;
+ * controls used by no course go last. Used by both the Overview table and the
+ * Excel export so columns match.
+ */
+export function orderControlsByCourse(
+  overview: OverviewRow[],
+  controls: string[],
+): string[] {
+  const agg = new Map<string, { sum: number; n: number }>();
+  for (const r of overview) {
+    for (const c of controls) {
+      const cell = r.cells[c];
+      if (!cell) continue;
+      const e = agg.get(c) ?? { sum: 0, n: 0 };
+      e.sum += cell.ratio;
+      e.n += 1;
+      agg.set(c, e);
+    }
+  }
+  const meanRatio = (c: string) => {
+    const e = agg.get(c);
+    return e && e.n > 0 ? e.sum / e.n : Infinity;
+  };
+  return [...controls].sort((a, b) => {
+    const ma = meanRatio(a);
+    const mb = meanRatio(b);
+    if (ma !== mb) return ma - mb;
+    return numericCompare(a, b);
+  });
+}
+
 export interface SqlRow {
   className: string;
   control: string;
