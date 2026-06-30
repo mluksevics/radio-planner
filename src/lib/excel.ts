@@ -26,9 +26,9 @@ export async function exportXlsx(state: AppState): Promise<void> {
   const ExcelJS = ((mod as any).default ?? mod) as typeof import("exceljs");
   const wb = new ExcelJS.Workbook();
 
+  buildOverviewSheet(wb, state);
   buildExportSheet(wb, state);
   buildMostUsedSheet(wb, state);
-  buildOverviewSheet(wb, state);
   buildSqlSheet(wb, state);
 
   const buf = await wb.xlsx.writeBuffer();
