@@ -50,13 +50,23 @@ function parseV3(doc: Document): XmlCourseImport {
   const coords: Record<string, Coord> = {};
   for (const ctrl of tags(doc, "Control")) {
     const id = childText(ctrl, "Id");
+    if (!id) continue; // skips the <Control> leaves inside CourseControl
     const pos = ctrl.getElementsByTagNameNS("*", "Position")[0];
-    if (!id || !pos) continue; // skips the <Control> leaves inside CourseControl
-    const lng = Number(pos.getAttribute("lng"));
-    const lat = Number(pos.getAttribute("lat"));
-    if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue;
-    const [x, y] = proj4(EPSG3059, [lng, lat]) as [number, number];
-    coords[id] = { x, y };
+    const lng = pos ? Number(pos.getAttribute("lng")) : NaN;
+    const lat = pos ? Number(pos.getAttribute("lat")) : NaN;
+    // Use the WGS84 position when present and not the null-island placeholder;
+    // otherwise fall back to the map-local MapPosition (mm, used as-is) so a
+    // non-georeferenced export still draws a wireframe.
+    if (Number.isFinite(lng) && Number.isFinite(lat) && (lng !== 0 || lat !== 0)) {
+      const [x, y] = proj4(EPSG3059, [lng, lat]) as [number, number];
+      coords[id] = { x, y };
+      continue;
+    }
+    const mp = ctrl.getElementsByTagNameNS("*", "MapPosition")[0];
+    if (!mp) continue;
+    const x = Number(mp.getAttribute("x"));
+    const y = Number(mp.getAttribute("y"));
+    if (Number.isFinite(x) && Number.isFinite(y)) coords[id] = { x, y };
   }
 
   const courseToClasses = new Map<string, string[]>();
@@ -108,10 +118,18 @@ function parseV3(doc: Document): XmlCourseImport {
  */
 function parseV2(doc: Document): XmlCourseImport {
   const coords: Record<string, Coord> = {};
+  // Prefer the geo-referenced grid position; fall back to the map-local
+  // MapPosition (mm from the map origin) when there is no ControlPosition, so
+  // non-georeferenced exports still draw a control/legs wireframe. Both are
+  // axis-aligned and y-up here, and v2 coordinates are used as-is (no
+  // projection), so either yields a self-consistent layout.
   const addPoint = (el: Element, codeTag: string) => {
     const code = childText(el, codeTag);
-    const pos = el.getElementsByTagNameNS("*", "ControlPosition")[0];
-    if (!code || !pos) return;
+    if (!code) return;
+    const pos =
+      el.getElementsByTagNameNS("*", "ControlPosition")[0] ??
+      el.getElementsByTagNameNS("*", "MapPosition")[0];
+    if (!pos) return;
     const x = Number(pos.getAttribute("x"));
     const y = Number(pos.getAttribute("y"));
     if (Number.isFinite(x) && Number.isFinite(y)) coords[code] = { x, y };
